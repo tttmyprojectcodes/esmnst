@@ -932,4 +932,148 @@ def payment_confirmation_email(name: str, amount: float, method: str):
                 <h2>Payment Received ✅</h2>
                 <p>Hi {name},</p>
                 <p>We've received your payment of <strong>${amount:.2f}</strong> via {method}.</p>
-                <div class="amount">${amount:.2f}</div
+                <div class="amount">${amount:.2f}</div>
+                <p>Your wallet has been credited. You can now purchase eSIMs for your travels.</p>
+                <br>
+                <center><a href="#" class="button">View Wallet</a></center>
+                <br>
+                <p>Safe travels!</p>
+            </div>
+            <div class="footer">
+                <div>© 2026 eSIMNest. A Tech Talk Titans Product</div>
+                <div>support@esimnest.com | www.esimnest.com</div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+def esim_delivery_email(name: str, country: str, plan: str, qr_code: str, activation_code: str, expiry_date):
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <style>
+            body {{ font-family: Arial, sans-serif; background-color: #0A1628; color: #FFFFFF; padding: 20px; }}
+            .container {{ max-width: 600px; margin: 0 auto; background: linear-gradient(135deg, #0A1628, #1E3A5F); padding: 40px; border-radius: 16px; }}
+            .header {{ text-align: center; padding-bottom: 30px; border-bottom: 1px solid rgba(255,255,255,0.1); }}
+            .title {{ font-size: 28px; color: #F59E0B; font-weight: bold; }}
+            .subtitle {{ font-size: 14px; color: #94A3B8; }}
+            .qr-box {{ text-align: center; background: rgba(255,255,255,0.05); padding: 30px; border-radius: 12px; margin: 20px 0; }}
+            .qr-code {{ font-family: monospace; font-size: 16px; color: #F59E0B; word-break: break-all; }}
+            .content {{ padding: 30px 0; }}
+            .button {{ display: inline-block; padding: 12px 30px; background: linear-gradient(135deg, #F59E0B, #D97706); color: #0A1628; text-decoration: none; border-radius: 8px; font-weight: 600; }}
+            .footer {{ text-align: center; padding-top: 30px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 12px; color: #64748B; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <div class="title">eSIMNest</div>
+                <div class="subtitle">Global Data eSIM</div>
+                <div style="font-size: 12px; color: #64748B;">A Tech Talk Titans Product</div>
+            </div>
+            <div class="content">
+                <h2>Your eSIM for {country} is Ready! 📱</h2>
+                <p>Hi {name},</p>
+                <p>Great news! Your eSIM for <strong>{country}</strong> is ready to install.</p>
+                
+                <div class="qr-box">
+                    <p><strong>Plan Details:</strong></p>
+                    <p>📶 {plan}</p>
+                    <p>⏳ Expires: {expiry_date.strftime('%d %B %Y')}</p>
+                </div>
+                
+                <div class="qr-box">
+                    <p><strong>📋 Scan this QR Code:</strong></p>
+                    <div style="background: white; padding: 20px; display: inline-block; border-radius: 8px;">
+                        <!-- In production, this would be an actual QR code image -->
+                        <div style="width: 150px; height: 150px; background: #000; margin: 0 auto; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 10px; word-break: break-all; padding: 10px;">
+                            {qr_code[:50]}...
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="qr-box">
+                    <p><strong>🔑 Activation Code (Manual Entry):</strong></p>
+                    <div class="qr-code">{activation_code}</div>
+                </div>
+                
+                <br>
+                <center><a href="#" class="button">View My eSIMs</a></center>
+                
+                <br>
+                <p><strong>How to install:</strong></p>
+                <ol>
+                    <li>Go to Settings → Mobile Network</li>
+                    <li>Tap "Add eSIM" or "Download eSIM"</li>
+                    <li>Scan the QR code above</li>
+                    <li>Follow the prompts to complete installation</li>
+                </ol>
+                
+                <p>Safe travels!</p>
+            </div>
+            <div class="footer">
+                <div>© 2026 eSIMNest. A Tech Talk Titans Product</div>
+                <div>support@esimnest.com | www.esimnest.com</div>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+# =====================================================
+# 13. PAYMENT GATEWAY HELPERS (Simplified)
+# =====================================================
+
+def create_razorpay_order(amount: float, currency: str = 'USD'):
+    """Create a Razorpay order"""
+    # In production, implement actual Razorpay API call
+    return {
+        'id': 'order_' + secrets.token_hex(8),
+        'amount': int(amount * 100),
+        'currency': currency
+    }
+
+def create_paypal_order(amount: float, currency: str = 'USD'):
+    """Create a PayPal order"""
+    # In production, implement actual PayPal API call
+    return {
+        'id': 'PAY-' + secrets.token_hex(8),
+        'amount': amount,
+        'currency': currency
+    }
+
+def verify_razorpay_payment(data: dict):
+    """Verify Razorpay payment signature"""
+    # In production, implement actual verification
+    return True
+
+def verify_paypal_payment(data: dict):
+    """Verify PayPal payment"""
+    # In production, implement actual verification
+    return True
+
+# =====================================================
+# 14. HEALTH CHECK
+# =====================================================
+
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "service": "eSIMNest API",
+        "version": "1.0.0",
+        "brand": "eSIMNest",
+        "slogan": "Global Data eSIM",
+        "company": "Tech Talk Titans"
+    }
+
+# =====================================================
+# 15. RUN
+# =====================================================
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
