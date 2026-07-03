@@ -1,16 +1,23 @@
 services:
+  # Backend API Service
+  - type: web
+    name: esmnst-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: ALLOWED_ORIGINS
+        value: https://esmnst-frontend.onrender.com,http://localhost:3000
+    rootDir: backend
+
   # Frontend Static Site
   - type: web
     name: esmnst-frontend
     env: static
-    buildCommand: |
-      apt-get update && apt-get install -y curl unzip git
-      git clone https://github.com/flutter/flutter.git -b stable /flutter
-      export PATH="/flutter/bin:$PATH"
-      cd frontend
-      flutter pub get
-      flutter build web --release --dart-define=API_URL=https://esmnst-backend.onrender.com
-    staticPublishPath: frontend/build/web  # ✅ RELATIVE PATH - NOT absolute
+    buildCommand: ./frontend/build.sh
+    staticPublishPath: frontend/build/web  # ✅ RELATIVE PATH
     envVars:
       - key: API_URL
         value: https://esmnst-backend.onrender.com
