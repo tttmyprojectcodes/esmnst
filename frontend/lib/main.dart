@@ -41,7 +41,159 @@ void main() async {
       appId: "1:738532349365:web:b75f0ad1bc6ab29cf875fc",
     ),
   );
+  
+  await GoogleSignIn.initialize();
+  
   runApp(const MyApp());
+}
+
+class SignInScreen extends StatefulWidget {
+  @override
+  _SignInScreenState createState() => _SignInScreenState();
+}
+
+class _SignInScreenState extends State<SignInScreen> {
+  final AuthService _auth = AuthService();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  bool _isLoading = false;
+
+  Future<void> _signInWithGoogle() async {
+    setState(() => _isLoading = true);
+    try {
+      final user = await _auth.signInWithGoogle();
+      if (user != null) {
+        // Navigate to home
+        Navigator.pushReplacementNamed(context, '/home');
+      }
+    } catch (e) {
+      print('Error: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Google sign-in failed: $e')),
+      );
+    }
+    setState(() => _isLoading = false);
+  }
+
+  Future<void> _signInWithEmail() async {
+    setState(() => _isLoading = true);
+    try {
+      final user = await _auth.signInWithEmail(
+        _emailController.text.trim(),
+        _passwordController.text.trim(),
+      );
+      if (user != null) {
+        Navigator.pushReplacementNamed(context, '/home');
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Sign-in failed: $e')),
+      );
+    }
+    setState(() => _isLoading = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      // Your UI code here
+    );
+  }
+}
+
+class AuthService {
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final GoogleSignIn _googleSignIn = GoogleSignIn();
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
+
+  // Email/Password Sign Up
+  Future<User?> signUpWithEmail(String email, String password, String displayName) async {
+    try {
+      UserCredential userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      
+      // Update display name
+      await userCredential.user?.updateDisplayName(displayName);
+      
+      // Create user document in Firestore
+      await _firestore.collection('users').doc(userCredential.user?.uid).set({
+        'email': email,
+        'displayName': displayName,
+        'createdAt': FieldValue.serverTimestamp(),
+        'walletBalance': 0,
+        'role': 'user',
+      });
+      
+      return userCredential.user;
+    } catch (e) {
+      print('Sign-up error: $e');
+      return null;
+    }
+  }
+
+  // Email/Password Sign In
+  Future<User?> signInWithEmail(String email, String password) async {
+    try {
+      UserCredential userCredential = await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      return userCredential.user;
+    } catch (e) {
+      print('Sign-in error: $e');
+      return null;
+    }
+  }
+
+  // Google Sign In (Web-compatible)
+  Future<User?> signInWithGoogle() async {
+    try {
+      // For web
+      final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
+      if (googleUser == null) {
+        return null; // User cancelled
+      }
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
+
+      final UserCredential userCredential = await _auth.signInWithCredential(credential);
+      
+      // Check if user exists in Firestore, if not create
+      final userDoc = await _firestore.collection('users').doc(userCredential.user?.uid).get();
+      if (!userDoc.exists) {
+        await _firestore.collection('users').doc(userCredential.user?.uid).set({
+          'email': userCredential.user?.email,
+          'displayName': userCredential.user?.displayName ?? 'User',
+          'createdAt': FieldValue.serverTimestamp(),
+          'walletBalance': 0,
+          'role': 'user',
+        });
+      }
+      
+      return userCredential.user;
+    } catch (e) {
+      print('Google sign-in error: $e');
+      return null;
+    }
+  }
+
+  // Sign Out
+  Future<void> signOut() async {
+    await _auth.signOut();
+    await _googleSignIn.signOut();
+  }
+
+  // Get current user
+  User? getCurrentUser() {
+    return _auth.currentUser;
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -152,7 +304,7 @@ class MyApp extends StatelessWidget {
 // 3. AUTH WRAPPER
 // =====================================================
 
-class AuthWrapper extends StatelessWidget {
+ AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
   @override
