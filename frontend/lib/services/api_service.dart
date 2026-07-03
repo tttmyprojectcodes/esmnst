@@ -3,15 +3,19 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class ApiService {
-  static const String baseUrl = 'https://esmnst-backend.onrender.com/api';
+  // ✅ Read from environment variable passed via --dart-define
+  static const String baseUrl = String.fromEnvironment(
+    'API_URL',
+    defaultValue: 'https://esmnst-backend.onrender.com/api',
+  );
   
-  // Get auth token - FIXED nullable issue
+  // Get auth token
   static Future<String> _getToken() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('User not authenticated');
     final String? token = await user.getIdToken();
     if (token == null) throw Exception('Failed to get token');
-    return token;  // ✅ Now returns non-nullable String
+    return token;
   }
 
   // Get headers with auth token
