@@ -1,4 +1,68 @@
 # =====================================================
+# 1. INITIALIZATION
+# =====================================================
+
+app = FastAPI(
+    title="eSIMNest API",
+    description="eSIMNest - Global Data eSIM Platform API",
+    version="1.0.0"
+)
+
+# =====================================================
+# 1.5 TEST ENDPOINT - SIMPLE
+# =====================================================
+
+@app.get("/api/esim/countries")
+async def get_countries(user: dict = Depends(get_current_user)):
+    """Get all available countries from eSIM Access"""
+    try:
+        if not ESIM_ACCESS_CODE:
+            return {
+                "success": True,
+                "countries": [
+                    {"code": "US", "name": "United States"},
+                    {"code": "IN", "name": "India"},
+                    {"code": "GB", "name": "United Kingdom"},
+                    {"code": "JP", "name": "Japan"},
+                    {"code": "SG", "name": "Singapore"},
+                    {"code": "AE", "name": "UAE"},
+                    {"code": "AU", "name": "Australia"},
+                    {"code": "FR", "name": "France"},
+                    {"code": "DE", "name": "Germany"},
+                    {"code": "IT", "name": "Italy"},
+                ],
+                "total": 10,
+                "fallback": True
+            }
+        
+        response = requests.post(
+            f"{ESIM_API_URL}/api/v1/open/location/list",
+            headers=get_esim_headers(),
+            json={},
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                location_list = data.get('obj', {}).get('locationList', [])
+                countries = []
+                for loc in location_list:
+                    countries.append({
+                        "code": loc.get('code'),
+                        "name": loc.get('name'),
+                        "type": loc.get('type')
+                    })
+                return {
+                    "success": True,
+                    "countries": countries,
+                    "total": len(countries)
+                }
+        
+        return {"success": False, "error": "Failed to get countries"}
+    except Exception as e:
+        print(f"❌ Error fetching countries: {e}")
+        return {"success": False, "error": str(e)}# =====================================================
 # eSIMNest - Global Data eSIM
 # A Tech Talk Titans Product
 # Backend API - FastAPI
