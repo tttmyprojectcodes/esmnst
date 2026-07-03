@@ -31,14 +31,21 @@ const String websiteUrl = 'www.esimnest.com';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final String apiKey = const String.fromEnvironment('FIREBASE_API_KEY');
+  final String authDomain = const String.fromEnvironment('FIREBASE_AUTH_DOMAIN');
+  final String projectId = const String.fromEnvironment('FIREBASE_PROJECT_ID');
+  final String storageBucket = const String.fromEnvironment('FIREBASE_STORAGE_BUCKET');
+  final String messagingSenderId = const String.fromEnvironment('FIREBASE_MESSAGING_SENDER_ID');
+  final String appId = const String.fromEnvironment('FIREBASE_APP_ID');
+
   await Firebase.initializeApp(
-    options: const FirebaseOptions(
-      apiKey: "AIzaSyCrDFrYcZ18IksAvlAGXjZGv-M--5kL-mM",
-      authDomain: "esimnest-prod.firebaseapp.com",
-      projectId: "esimnest-prod",
-      storageBucket: "esimnest-prod.firebasestorage.app",
-      messagingSenderId: "738532349365",
-      appId: "1:738532349365:web:b75f0ad1bc6ab29cf875fc",
+    options: FirebaseOptions(
+      apiKey: apiKey,
+      authDomain: authDomain,
+      projectId: projectId,
+      storageBucket: storageBucket,
+      messagingSenderId: messagingSenderId,
+      appId: appId,
     ),
   );
   
