@@ -22,7 +22,7 @@ services:
     staticPublishPath: frontend/build/web
     envVars:
       - key: API_URL
-        value: https://esmnst-backend.onrender.com
+        value: https://esmnst-backend.onrender.com/api
       - key: FIREBASE_API_KEY
         value: ${FIREBASE_API_KEY}
       - key: FIREBASE_AUTH_DOMAIN
