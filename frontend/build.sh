@@ -14,6 +14,7 @@ flutter pub get
 
 echo "Building web app with environment variables..."
 flutter build web --release \
+  --dart-define=API_URL="$API_URL" \
   --dart-define=FIREBASE_API_KEY="$FIREBASE_API_KEY" \
   --dart-define=FIREBASE_AUTH_DOMAIN="$FIREBASE_AUTH_DOMAIN" \
   --dart-define=FIREBASE_PROJECT_ID="$FIREBASE_PROJECT_ID" \
