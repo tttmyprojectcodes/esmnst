@@ -1607,13 +1607,30 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
-                                    '🌍 BUY eSIM',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: Color(0xFF0A1628),
-                                    ),
+                                  Row(
+                                    children: [
+                                      Image.asset(
+                                        'assets/images/logo.png',
+                                        width: 24,
+                                        height: 24,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          return const Icon(
+                                            Icons.shopping_cart,
+                                            color: Color(0xFF0A1628),
+                                            size: 20,
+                                          );
+                                        },
+                                      ),
+                                      const SizedBox(width: 8),
+                                      const Text(
+                                        'BUY eSIM',
+                                        style: TextStyle(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.bold,
+                                          color: Color(0xFF0A1628),
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   const Text(
                                     'Find the perfect plan for your trip',
@@ -2289,12 +2306,29 @@ class _MyEsimsScreenState extends State<MyEsimsScreen> {
         children: [
           Row(
             children: [
-              Text(
-                '🌍 ${esim['country'] ?? 'Unknown'}',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
+              Row(
+                children: [
+                  Image.asset(
+                    'assets/images/logo.png',
+                    width: 20,
+                    height: 20,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Icon(
+                        Icons.sim_card,
+                        color: Color(0xFFF59E0B),
+                        size: 16,
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    esim['country'] ?? 'Unknown',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
               const Spacer(),
               Container(
@@ -2724,11 +2758,28 @@ class _MyOrdersScreenState extends State<MyOrdersScreen> {
           const SizedBox(height: 12),
           Row(
             children: [
-              Text(
-                '🌍 ${order['country'] ?? 'Unknown'}',
-                style: const TextStyle(
-                  fontWeight: FontWeight.w500,
-                ),
+              Row(
+                children: [
+                  Image.asset(
+                    'assets/images/logo.png',
+                    width: 18,
+                    height: 18,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Icon(
+                        Icons.sim_card,
+                        color: Color(0xFFF59E0B),
+                        size: 14,
+                      );
+                    },
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    order['country'] ?? 'Unknown',
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
               ),
               const Spacer(),
               Text(
