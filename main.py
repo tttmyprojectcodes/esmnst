@@ -62,30 +62,17 @@ except Exception as e:
 # =====================================================
 
 ESIM_ACCESS_CODE = os.getenv('ESIM_ACCESS_CODE')
-ESIM_SECRET_KEY = os.getenv('ESIM_SECRET_KEY')
 ESIM_API_URL = os.getenv('ESIM_API_URL', 'https://api.esimaccess.com')
-MARKUP_MULTIPLIER = float(os.getenv('MARKUP_MULTIPLIER', '2.1'))
+MARKUP_MULTIPLIER = float(os.getenv('MARKUP_MULTIPLIER', '2.0'))
 
 # =====================================================
-# 4. eSIM ACCESS AUTHENTICATION
+# 4. eSIM ACCESS AUTHENTICATION (UPDATED)
 # =====================================================
 
-def get_esim_auth_headers():
-    """Generate authentication headers for eSIM Access API"""
-    timestamp = str(int(time.time() * 1000))
-    
-    # Create signature
-    message = ESIM_ACCESS_CODE + timestamp
-    signature = hmac.new(
-        ESIM_SECRET_KEY.encode('utf-8'),
-        message.encode('utf-8'),
-        hashlib.sha256
-    ).hexdigest()
-    
+def get_esim_headers():
+    """Generate headers for eSIM Access API - using RT-AccessCode header"""
     return {
-        "AccessCode": ESIM_ACCESS_CODE,
-        "Timestamp": timestamp,
-        "Signature": signature,
+        "RT-AccessCode": ESIM_ACCESS_CODE,
         "Content-Type": "application/json"
     }
 
@@ -524,7 +511,7 @@ async def get_transactions(
         raise HTTPException(status_code=400, detail=str(e))
 
 # =====================================================
-# 10. eSIM ACCESS ENDPOINTS (REAL INTEGRATION)
+# 10. eSIM ACCESS ENDPOINTS (UPDATED)
 # =====================================================
 
 # 10.1 Get Provider Balance
@@ -532,7 +519,6 @@ async def get_transactions(
 async def get_provider_balance(user: dict = Depends(get_current_user)):
     """Get current balance from eSIM Access (Admin only)"""
     try:
-        # Check if user is admin
         uid = user['uid']
         user_ref = db.collection('users').document(uid)
         user_doc = user_ref.get()
@@ -541,15 +527,16 @@ async def get_provider_balance(user: dict = Depends(get_current_user)):
             raise HTTPException(status_code=403, detail="Admin access required")
         
         response = requests.post(
-            f"{ESIM_API_URL}/api/v1/GetMerchantBalance",
-            headers=get_esim_auth_headers(),
-            json={}
+            f"{ESIM_API_URL}/api/v1/open/balance/query",
+            headers=get_esim_headers(),
+            json={},
+            timeout=10
         )
         
         if response.status_code == 200:
             data = response.json()
             if data.get('success'):
-                balance = data.get('obj', {}).get('balance', 0) / 10000
+                balance = data.get('obj', {}).get('balance', 0)
                 return {
                     "success": True,
                     "balance": balance,
@@ -560,42 +547,44 @@ async def get_provider_balance(user: dict = Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-# 10.2 Get Available Countries
+# 10.2 Get Available Countries (UPDATED)
 @app.get("/api/esim/countries")
 async def get_countries(user: dict = Depends(get_current_user)):
     """Get all available countries from eSIM Access"""
     try:
+        if not ESIM_ACCESS_CODE:
+            raise HTTPException(status_code=400, detail="eSIM Access not configured")
+        
         response = requests.post(
-            f"{ESIM_API_URL}/api/v1/GetPackageList",
-            headers=get_esim_auth_headers(),
-            json={"pageNum": 1, "pageSize": 100}
+            f"{ESIM_API_URL}/api/v1/open/location/list",
+            headers=get_esim_headers(),
+            json={},
+            timeout=10
         )
         
         if response.status_code == 200:
             data = response.json()
             if data.get('success'):
-                packages = data.get('obj', {}).get('packageList', [])
-                # Extract unique countries
-                countries = {}
-                for p in packages:
-                    country_code = p.get('locationCode')
-                    country_name = p.get('locationName')
-                    if country_code and country_name:
-                        countries[country_code] = country_name
-                
-                # Convert to list
-                country_list = [{"code": k, "name": v} for k, v in countries.items()]
+                location_list = data.get('obj', {}).get('locationList', [])
+                countries = []
+                for loc in location_list:
+                    countries.append({
+                        "code": loc.get('code'),
+                        "name": loc.get('name'),
+                        "type": loc.get('type')
+                    })
                 return {
                     "success": True,
-                    "countries": country_list,
-                    "total": len(country_list)
+                    "countries": countries,
+                    "total": len(countries)
                 }
         
         return {"success": False, "error": "Failed to get countries"}
     except Exception as e:
+        print(f"❌ Error fetching countries: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-# 10.3 Get Plans for a Country
+# 10.3 Get Plans for a Country (UPDATED)
 @app.get("/api/esim/plans")
 async def get_plans(
     country: Optional[str] = None,
@@ -603,25 +592,28 @@ async def get_plans(
 ):
     """Get eSIM plans from eSIM Access with markup applied"""
     try:
-        payload = {"pageNum": 1, "pageSize": 100}
+        if not ESIM_ACCESS_CODE:
+            raise HTTPException(status_code=400, detail="eSIM Access not configured")
+        
+        payload = {}
         if country:
             payload["locationCode"] = country
         
         response = requests.post(
-            f"{ESIM_API_URL}/api/v1/GetPackageList",
-            headers=get_esim_auth_headers(),
-            json=payload
+            f"{ESIM_API_URL}/api/v1/open/package/list",
+            headers=get_esim_headers(),
+            json=payload,
+            timeout=10
         )
         
         if response.status_code == 200:
             data = response.json()
             if data.get('success'):
-                plans = data.get('obj', {}).get('packageList', [])
+                packages = data.get('obj', {}).get('packageList', [])
                 
-                # Apply markup and format
                 formatted_plans = []
-                for plan in plans:
-                    wholesale_price = plan.get('price', 0) / 10000  # Convert from cents to USD
+                for plan in packages:
+                    wholesale_price = plan.get('price', 0)
                     retail_price = wholesale_price * MARKUP_MULTIPLIER
                     
                     formatted_plans.append({
@@ -646,9 +638,10 @@ async def get_plans(
         
         return {"success": False, "error": "Failed to get plans"}
     except Exception as e:
+        print(f"❌ Error fetching plans: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
-# 10.4 Purchase eSIM (REAL PURCHASE)
+# 10.4 Purchase eSIM (UPDATED - Endpoint changed)
 @app.post("/api/esim/purchase")
 async def purchase_esim(purchase: PurchasePlan, user: dict = Depends(get_current_user)):
     """Purchase an eSIM from eSIM Access"""
@@ -656,6 +649,9 @@ async def purchase_esim(purchase: PurchasePlan, user: dict = Depends(get_current
         uid = user['uid']
         plan_id = purchase.plan_id
         country = purchase.country
+        
+        if not ESIM_ACCESS_CODE:
+            raise HTTPException(status_code=400, detail="eSIM Access not configured")
         
         # Get user data
         user_ref = db.collection('users').document(uid)
@@ -669,9 +665,10 @@ async def purchase_esim(purchase: PurchasePlan, user: dict = Depends(get_current
         
         # Get plan details from eSIM Access
         plan_response = requests.post(
-            f"{ESIM_API_URL}/api/v1/GetPackageList",
-            headers=get_esim_auth_headers(),
-            json={"locationCode": country, "pageNum": 1, "pageSize": 100}
+            f"{ESIM_API_URL}/api/v1/open/package/list",
+            headers=get_esim_headers(),
+            json={"locationCode": country} if country else {},
+            timeout=10
         )
         
         if plan_response.status_code != 200:
@@ -691,7 +688,7 @@ async def purchase_esim(purchase: PurchasePlan, user: dict = Depends(get_current
         if not plan:
             raise HTTPException(status_code=404, detail="Plan not found")
         
-        wholesale_price = plan.get('price', 0) / 10000
+        wholesale_price = plan.get('price', 0)
         retail_price = wholesale_price * MARKUP_MULTIPLIER
         
         # Check wallet balance
@@ -720,18 +717,18 @@ async def purchase_esim(purchase: PurchasePlan, user: dict = Depends(get_current
         
         # 🚀 Purchase from eSIM Access
         purchase_response = requests.post(
-            f"{ESIM_API_URL}/api/v1/OrderProfile",
-            headers=get_esim_auth_headers(),
+            f"{ESIM_API_URL}/api/v1/open/order/profile",
+            headers=get_esim_headers(),
             json={
                 "transactionId": transaction_id,
                 "packageInfoList": [
                     {
                         "packageCode": plan_id,
-                        "count": 1,
-                        "price": plan.get('price', 0)  # Wholesale price in cents
+                        "count": 1
                     }
                 ]
-            }
+            },
+            timeout=10
         )
         
         if purchase_response.status_code == 200:
@@ -801,8 +798,9 @@ async def purchase_esim(purchase: PurchasePlan, user: dict = Depends(get_current
             pass
         raise HTTPException(status_code=400, detail=str(e))
 
+
 # =====================================================
-# 11. WEBHOOK FOR eSIM DELIVERY
+# 11. WEBHOOK FOR eSIM DELIVERY (UPDATED)
 # =====================================================
 
 @app.post("/api/webhooks/esim")
@@ -812,32 +810,32 @@ async def esim_webhook(request: Request):
         body = await request.json()
         print(f"Webhook received: {json.dumps(body)}")
         
-        event_type = body.get('event')
-        order_no = body.get('orderNo')
-        transaction_id = body.get('transactionId')
-        esim_tran_no = body.get('esimTranNo')
+        # New webhook format from documentation
+        notify_type = body.get('notifyType')
+        notify_id = body.get('notifyId')
+        content = body.get('content', {})
         
-        if event_type == 'OrderStatus':
-            order_status = body.get('orderStatus')
+        if notify_type == 'ORDER_STATUS':
+            order_no = content.get('orderNo')
+            order_status = content.get('orderStatus')
+            transaction_id = content.get('transactionId')
             
             if order_status == 'GOT_RESOURCE':
                 # eSIM is ready! Query allocated profile
                 profile_response = requests.post(
-                    f"{ESIM_API_URL}/api/v1/QueryAllocatedProfiles",
-                    headers=get_esim_auth_headers(),
-                    json={
-                        "orderNo": order_no,
-                        "pager": {"pageNum": 1, "pageSize": 50}
-                    }
+                    f"{ESIM_API_URL}/api/v1/open/esim/query",
+                    headers=get_esim_headers(),
+                    json={"orderNo": order_no},
+                    timeout=10
                 )
                 
                 if profile_response.status_code == 200:
                     profile_data = profile_response.json()
                     if profile_data.get('success'):
-                        profiles = profile_data.get('obj', {}).get('profileList', [])
+                        esim_list = profile_data.get('obj', {}).get('esimList', [])
                         
-                        if profiles:
-                            profile = profiles[0]
+                        if esim_list:
+                            esim_info = esim_list[0]
                             
                             # Find the order
                             orders_ref = db.collection('orders').where('orderNo', '==', order_no).limit(1)
@@ -869,10 +867,10 @@ async def esim_webhook(request: Request):
                                     'plan': order_doc.to_dict().get('plan', {}).get('name', ''),
                                     'orderNo': order_no,
                                     'transactionId': transaction_id,
-                                    'esimTranNo': esim_tran_no,
-                                    'iccid': profile.get('iccid'),
-                                    'qrCodeUrl': profile.get('qrCodeUrl'),
-                                    'ac': profile.get('ac'),
+                                    'esimTranNo': esim_info.get('esimTranNo'),
+                                    'iccid': esim_info.get('iccid'),
+                                    'qrCodeUrl': esim_info.get('qrCodeUrl'),
+                                    'ac': esim_info.get('ac'),
                                     'status': 'active',
                                     'activationDate': datetime.now(),
                                     'expiryDate': datetime.now() + timedelta(days=30),
@@ -895,8 +893,8 @@ async def esim_webhook(request: Request):
                                             user_name,
                                             order_doc.to_dict().get('country', ''),
                                             order_doc.to_dict().get('plan', {}).get('name', 'Plan'),
-                                            profile.get('qrCodeUrl', ''),
-                                            profile.get('ac', ''),
+                                            esim_info.get('qrCodeUrl', ''),
+                                            esim_info.get('ac', ''),
                                             datetime.now() + timedelta(days=30)
                                         )
                                     )
