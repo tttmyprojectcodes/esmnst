@@ -4,7 +4,7 @@
 # Backend API - FastAPI
 # =====================================================
 
-from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi import FastAPI, HTTPException, Depends, Header, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
@@ -17,6 +17,7 @@ from datetime import datetime, timedelta
 import secrets
 import hashlib
 import hmac
+import time
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -44,17 +45,10 @@ app.add_middleware(
 # 2. FIREBASE INITIALIZATION
 # =====================================================
 
-# Initialize Firebase Admin SDK
-# You'll need to download your service account key from Firebase Console
-# Settings > Service Accounts > Generate New Private Key
-# Save it as service-account.json in your backend folder
-
 try:
-    # Use environment variable for production
     if os.getenv('FIREBASE_CREDENTIALS'):
         cred = credentials.Certificate(json.loads(os.getenv('FIREBASE_CREDENTIALS')))
     else:
-        # Use local file for development
         cred = credentials.Certificate("service-account.json")
     
     firebase_admin.initialize_app(cred)
@@ -64,15 +58,39 @@ except Exception as e:
     print(f"❌ Firebase initialization error: {e}")
 
 # =====================================================
-# 3. PROVIDER API CONFIGURATION (eSIM.tech)
+# 3. eSIM ACCESS API CONFIGURATION (REAL PROVIDER)
 # =====================================================
 
-PROVIDER_API_KEY = os.getenv('PROVIDER_API_KEY', 'your-api-key-here')
-PROVIDER_API_URL = os.getenv('PROVIDER_API_URL', 'https://api.esim.tech/v1')
-MARKUP_MULTIPLIER = 2  # Double the price
+ESIM_ACCESS_CODE = os.getenv('ESIM_ACCESS_CODE')
+ESIM_SECRET_KEY = os.getenv('ESIM_SECRET_KEY')
+ESIM_API_URL = os.getenv('ESIM_API_URL', 'https://api.esimaccess.com')
+MARKUP_MULTIPLIER = float(os.getenv('MARKUP_MULTIPLIER', '2.0'))
 
 # =====================================================
-# 4. PYDANTIC MODELS (Data Validation)
+# 4. eSIM ACCESS AUTHENTICATION
+# =====================================================
+
+def get_esim_auth_headers():
+    """Generate authentication headers for eSIM Access API"""
+    timestamp = str(int(time.time() * 1000))
+    
+    # Create signature
+    message = ESIM_ACCESS_CODE + timestamp
+    signature = hmac.new(
+        ESIM_SECRET_KEY.encode('utf-8'),
+        message.encode('utf-8'),
+        hashlib.sha256
+    ).hexdigest()
+    
+    return {
+        "AccessCode": ESIM_ACCESS_CODE,
+        "Timestamp": timestamp,
+        "Signature": signature,
+        "Content-Type": "application/json"
+    }
+
+# =====================================================
+# 5. PYDANTIC MODELS (Data Validation)
 # =====================================================
 
 class UserRegister(BaseModel):
@@ -101,23 +119,12 @@ class PurchasePlan(BaseModel):
     plan_id: str
     country: str
 
-class PlanResponse(BaseModel):
-    id: str
-    country: str
-    data: str
-    validity: str
-    price: float  # Retail price (doubled)
-    currency: str
-    plan_type: str
-
 # =====================================================
-# 5. AUTHENTICATION HELPERS
+# 6. AUTHENTICATION HELPERS
 # =====================================================
 
 async def get_current_user(authorization: str = Header(...)):
-    """Verify Firebase ID token and return user data"""
     try:
-        # Extract token from Bearer header
         token = authorization.split(' ')[1]
         decoded_token = auth.verify_id_token(token)
         return decoded_token
@@ -125,7 +132,6 @@ async def get_current_user(authorization: str = Header(...)):
         raise HTTPException(status_code=401, detail="Invalid authentication")
 
 def create_user_document(uid: str, user_data: dict):
-    """Create user document in Firestore"""
     try:
         user_ref = db.collection('users').document(uid)
         user_ref.set({
@@ -148,18 +154,15 @@ def create_user_document(uid: str, user_data: dict):
         return False
 
 def generate_referral_code():
-    """Generate unique referral code"""
     return secrets.token_hex(4).upper()
 
 # =====================================================
-# 6. AUTHENTICATION ENDPOINTS
+# 7. AUTHENTICATION ENDPOINTS
 # =====================================================
 
 @app.post("/api/auth/register")
 async def register_user(user_data: UserRegister):
-    """Register a new user"""
     try:
-        # Create user in Firebase Auth
         user = auth.create_user(
             email=user_data.email,
             password=user_data.password,
@@ -167,10 +170,8 @@ async def register_user(user_data: UserRegister):
             phone_number=user_data.phone
         )
         
-        # Create user document in Firestore
         create_user_document(user.uid, user_data.dict())
         
-        # Send welcome email via Firestore trigger
         send_email_trigger(
             to=user_data.email,
             subject="Welcome to eSIMNest! 🎉",
@@ -187,7 +188,6 @@ async def register_user(user_data: UserRegister):
 
 @app.post("/api/auth/verify-token")
 async def verify_token(user: dict = Depends(get_current_user)):
-    """Verify Firebase ID token"""
     return {
         "success": True,
         "user": {
@@ -198,12 +198,11 @@ async def verify_token(user: dict = Depends(get_current_user)):
     }
 
 # =====================================================
-# 7. USER ENDPOINTS
+# 8. USER ENDPOINTS
 # =====================================================
 
 @app.get("/api/user/profile")
 async def get_user_profile(user: dict = Depends(get_current_user)):
-    """Get user profile data"""
     try:
         uid = user['uid']
         user_ref = db.collection('users').document(uid)
@@ -220,12 +219,10 @@ async def get_user_profile(user: dict = Depends(get_current_user)):
 
 @app.put("/api/user/profile")
 async def update_user_profile(updates: dict, user: dict = Depends(get_current_user)):
-    """Update user profile"""
     try:
         uid = user['uid']
         user_ref = db.collection('users').document(uid)
         
-        # Remove fields that shouldn't be updated
         updates.pop('uid', None)
         updates.pop('createdAt', None)
         updates.pop('walletBalance', None)
@@ -238,11 +235,9 @@ async def update_user_profile(updates: dict, user: dict = Depends(get_current_us
 
 @app.get("/api/user/dashboard")
 async def get_dashboard(user: dict = Depends(get_current_user)):
-    """Get dashboard statistics"""
     try:
         uid = user['uid']
         
-        # Get user data
         user_ref = db.collection('users').document(uid)
         user_doc = user_ref.get()
         
@@ -251,19 +246,15 @@ async def get_dashboard(user: dict = Depends(get_current_user)):
         
         user_data = user_doc.to_dict()
         
-        # Get active eSIMs count
         esims_ref = db.collection('esims').where('userId', '==', uid).where('status', '==', 'active')
         active_esims = esims_ref.get()
         
-        # Get orders count
         orders_ref = db.collection('orders').where('userId', '==', uid)
         total_orders = orders_ref.get()
         
-        # Get recent orders
         recent_orders_ref = db.collection('orders').where('userId', '==', uid).order_by('createdAt', direction=firestore.Query.DESCENDING).limit(5)
         recent_orders = recent_orders_ref.get()
         
-        # Get active eSIMs
         active_esims_ref = db.collection('esims').where('userId', '==', uid).where('status', '==', 'active').limit(3)
         active_esims_data = active_esims_ref.get()
         
@@ -297,12 +288,11 @@ async def get_dashboard(user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail=str(e))
 
 # =====================================================
-# 8. WALLET ENDPOINTS
+# 9. WALLET ENDPOINTS
 # =====================================================
 
 @app.get("/api/wallet/balance")
 async def get_wallet_balance(user: dict = Depends(get_current_user)):
-    """Get user wallet balance"""
     try:
         uid = user['uid']
         user_ref = db.collection('users').document(uid)
@@ -321,11 +311,9 @@ async def get_wallet_balance(user: dict = Depends(get_current_user)):
 
 @app.post("/api/wallet/add-money")
 async def add_money(request: AddMoneyRequest, user: dict = Depends(get_current_user)):
-    """Add money to wallet via payment gateway"""
     try:
         uid = user['uid']
         
-        # Create payment request in Firestore
         payment_ref = db.collection('paymentRequests').add({
             'userId': uid,
             'method': request.method,
@@ -336,7 +324,6 @@ async def add_money(request: AddMoneyRequest, user: dict = Depends(get_current_u
         })
         
         if request.method == 'razorpay':
-            # Create Razorpay order (simplified)
             razorpay_response = create_razorpay_order(request.amount, request.currency)
             return {
                 "success": True,
@@ -346,7 +333,6 @@ async def add_money(request: AddMoneyRequest, user: dict = Depends(get_current_u
                 "currency": request.currency
             }
         elif request.method == 'paypal':
-            # Create PayPal order (simplified)
             paypal_response = create_paypal_order(request.amount, request.currency)
             return {
                 "success": True,
@@ -356,7 +342,6 @@ async def add_money(request: AddMoneyRequest, user: dict = Depends(get_current_u
                 "currency": request.currency
             }
         else:
-            # Manual payment
             return {
                 "success": True,
                 "payment_id": payment_ref[1].id,
@@ -369,13 +354,11 @@ async def add_money(request: AddMoneyRequest, user: dict = Depends(get_current_u
 
 @app.post("/api/wallet/verify-payment")
 async def verify_payment(payment_data: dict, user: dict = Depends(get_current_user)):
-    """Verify payment and credit wallet"""
     try:
         uid = user['uid']
         payment_id = payment_data.get('payment_id')
         payment_method = payment_data.get('method')
         
-        # Verify payment with gateway
         verified = False
         if payment_method == 'razorpay':
             verified = verify_razorpay_payment(payment_data)
@@ -385,7 +368,6 @@ async def verify_payment(payment_data: dict, user: dict = Depends(get_current_us
         if not verified:
             raise HTTPException(status_code=400, detail="Payment verification failed")
         
-        # Get payment request
         payment_ref = db.collection('paymentRequests').document(payment_id)
         payment_doc = payment_ref.get()
         
@@ -394,17 +376,14 @@ async def verify_payment(payment_data: dict, user: dict = Depends(get_current_us
         
         payment_data = payment_doc.to_dict()
         
-        # Credit wallet
         amount = payment_data.get('amount', 0)
         user_ref = db.collection('users').document(uid)
         
-        # Update wallet balance
         user_ref.update({
             'walletBalance': firestore.Increment(amount)
         })
         
-        # Create transaction record
-        transaction_ref = db.collection('transactions').add({
+        db.collection('transactions').add({
             'userId': uid,
             'type': 'credit',
             'amount': amount,
@@ -415,7 +394,6 @@ async def verify_payment(payment_data: dict, user: dict = Depends(get_current_us
             'createdAt': firestore.SERVER_TIMESTAMP
         })
         
-        # Send email notification via Firestore
         user_doc = db.collection('users').document(uid).get()
         user_email = user_doc.to_dict().get('email')
         user_name = user_doc.to_dict().get('displayName', '')
@@ -441,7 +419,6 @@ async def get_transactions(
     offset: Optional[int] = 0,
     user: dict = Depends(get_current_user)
 ):
-    """Get transaction history"""
     try:
         uid = user['uid']
         trans_ref = db.collection('transactions').where('userId', '==', uid).order_by('createdAt', direction=firestore.Query.DESCENDING).limit(limit)
@@ -463,74 +440,134 @@ async def get_transactions(
         raise HTTPException(status_code=400, detail=str(e))
 
 # =====================================================
-# 9. eSIM ENDPOINTS
+# 10. eSIM ACCESS ENDPOINTS (REAL INTEGRATION)
 # =====================================================
 
-@app.get("/api/esim/countries")
-async def get_countries(user: dict = Depends(get_current_user)):
-    """Get all available countries"""
+# 10.1 Get Provider Balance
+@app.get("/api/esim/provider-balance")
+async def get_provider_balance(user: dict = Depends(get_current_user)):
+    """Get current balance from eSIM Access (Admin only)"""
     try:
-        # Fetch from provider API
-        response = requests.get(
-            f"{PROVIDER_API_URL}/countries",
-            headers={"Authorization": f"Bearer {PROVIDER_API_KEY}"}
+        # Check if user is admin
+        uid = user['uid']
+        user_ref = db.collection('users').document(uid)
+        user_doc = user_ref.get()
+        
+        if not user_doc.exists or user_doc.to_dict().get('role') != 'admin':
+            raise HTTPException(status_code=403, detail="Admin access required")
+        
+        response = requests.post(
+            f"{ESIM_API_URL}/api/v1/GetMerchantBalance",
+            headers=get_esim_auth_headers(),
+            json={}
         )
         
         if response.status_code == 200:
-            return response.json()
-        else:
-            # Fallback to Firestore
-            countries_ref = db.collection('countries').where('active', '==', True)
-            countries_docs = countries_ref.get()
-            return [doc.to_dict() for doc in countries_docs]
+            data = response.json()
+            if data.get('success'):
+                balance = data.get('obj', {}).get('balance', 0) / 10000
+                return {
+                    "success": True,
+                    "balance": balance,
+                    "currency": "USD"
+                }
+        
+        return {"success": False, "error": "Failed to get balance"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+# 10.2 Get Available Countries
+@app.get("/api/esim/countries")
+async def get_countries(user: dict = Depends(get_current_user)):
+    """Get all available countries from eSIM Access"""
+    try:
+        response = requests.post(
+            f"{ESIM_API_URL}/api/v1/GetPackageList",
+            headers=get_esim_auth_headers(),
+            json={"pageNum": 1, "pageSize": 100}
+        )
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data.get('success'):
+                packages = data.get('obj', {}).get('packageList', [])
+                # Extract unique countries
+                countries = {}
+                for p in packages:
+                    country_code = p.get('locationCode')
+                    country_name = p.get('locationName')
+                    if country_code and country_name:
+                        countries[country_code] = country_name
+                
+                # Convert to list
+                country_list = [{"code": k, "name": v} for k, v in countries.items()]
+                return {
+                    "success": True,
+                    "countries": country_list,
+                    "total": len(country_list)
+                }
+        
+        return {"success": False, "error": "Failed to get countries"}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+# 10.3 Get Plans for a Country
 @app.get("/api/esim/plans")
 async def get_plans(
     country: Optional[str] = None,
     user: dict = Depends(get_current_user)
 ):
-    """Get eSIM plans with doubled prices"""
+    """Get eSIM plans from eSIM Access with markup applied"""
     try:
-        # Fetch plans from provider API
+        payload = {"pageNum": 1, "pageSize": 100}
         if country:
-            response = requests.get(
-                f"{PROVIDER_API_URL}/plans?country={country}",
-                headers={"Authorization": f"Bearer {PROVIDER_API_KEY}"}
-            )
-        else:
-            response = requests.get(
-                f"{PROVIDER_API_URL}/plans",
-                headers={"Authorization": f"Bearer {PROVIDER_API_KEY}"}
-            )
+            payload["locationCode"] = country
+        
+        response = requests.post(
+            f"{ESIM_API_URL}/api/v1/GetPackageList",
+            headers=get_esim_auth_headers(),
+            json=payload
+        )
         
         if response.status_code == 200:
-            plans = response.json()
-            
-            # 🏷️ Double the price for each plan
-            for plan in plans:
-                wholesale_price = plan.get('price', 0)
-                plan['price'] = wholesale_price * MARKUP_MULTIPLIER  # Hide wholesale
-                plan['wholesale'] = None  # Remove wholesale from response
-                plan['markup'] = MARKUP_MULTIPLIER
-            
-            return plans
-        else:
-            # Fallback to Firestore
-            plans_ref = db.collection('plans')
-            if country:
-                plans_ref = plans_ref.where('country', '==', country)
-            plans_ref = plans_ref.where('active', '==', True)
-            plans_docs = plans_ref.get()
-            
-            return [doc.to_dict() for doc in plans_docs]
+            data = response.json()
+            if data.get('success'):
+                plans = data.get('obj', {}).get('packageList', [])
+                
+                # Apply markup and format
+                formatted_plans = []
+                for plan in plans:
+                    wholesale_price = plan.get('price', 0) / 10000  # Convert from cents to USD
+                    retail_price = wholesale_price * MARKUP_MULTIPLIER
+                    
+                    formatted_plans.append({
+                        "id": plan.get('packageCode'),
+                        "name": plan.get('name'),
+                        "country": plan.get('locationName'),
+                        "countryCode": plan.get('locationCode'),
+                        "data": plan.get('volume'),
+                        "validity": plan.get('duration'),
+                        "wholesale_price": wholesale_price,
+                        "price": retail_price,
+                        "currency": "USD",
+                        "markup": MARKUP_MULTIPLIER,
+                        "type": plan.get('type', 'data')
+                    })
+                
+                return {
+                    "success": True,
+                    "plans": formatted_plans,
+                    "total": len(formatted_plans)
+                }
+        
+        return {"success": False, "error": "Failed to get plans"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+# 10.4 Purchase eSIM (REAL PURCHASE)
 @app.post("/api/esim/purchase")
 async def purchase_esim(purchase: PurchasePlan, user: dict = Depends(get_current_user)):
-    """Purchase an eSIM plan"""
+    """Purchase an eSIM from eSIM Access"""
     try:
         uid = user['uid']
         plan_id = purchase.plan_id
@@ -546,49 +583,47 @@ async def purchase_esim(purchase: PurchasePlan, user: dict = Depends(get_current
         user_data = user_doc.to_dict()
         balance = user_data.get('walletBalance', 0)
         
-        # Get plan price (fetch from provider or Firestore)
-        plan_response = requests.get(
-            f"{PROVIDER_API_URL}/plans/{plan_id}",
-            headers={"Authorization": f"Bearer {PROVIDER_API_KEY}"}
+        # Get plan details from eSIM Access
+        plan_response = requests.post(
+            f"{ESIM_API_URL}/api/v1/GetPackageList",
+            headers=get_esim_auth_headers(),
+            json={"locationCode": country, "pageNum": 1, "pageSize": 100}
         )
         
         if plan_response.status_code != 200:
-            raise HTTPException(status_code=400, detail="Plan not found")
+            raise HTTPException(status_code=400, detail="Failed to get plan details")
         
         plan_data = plan_response.json()
-        wholesale_price = plan_data.get('price', 0)
+        if not plan_data.get('success'):
+            raise HTTPException(status_code=400, detail="Plan not found")
+        
+        # Find the specific plan
+        plan = None
+        for p in plan_data.get('obj', {}).get('packageList', []):
+            if p.get('packageCode') == plan_id:
+                plan = p
+                break
+        
+        if not plan:
+            raise HTTPException(status_code=404, detail="Plan not found")
+        
+        wholesale_price = plan.get('price', 0) / 10000
         retail_price = wholesale_price * MARKUP_MULTIPLIER
         
         # Check wallet balance
         if balance < retail_price:
             raise HTTPException(status_code=400, detail="Insufficient wallet balance")
         
-        # Debit wallet
-        user_ref.update({
-            'walletBalance': firestore.Increment(-retail_price)
-        })
-        
-        # Create transaction
-        transaction_ref = db.collection('transactions').add({
-            'userId': uid,
-            'type': 'debit',
-            'amount': retail_price,
-            'currency': 'USD',
-            'description': f'Purchased eSIM for {country} - {plan_data.get("name", "Plan")}',
-            'reference': plan_id,
-            'status': 'completed',
-            'createdAt': firestore.SERVER_TIMESTAMP
-        })
-        
-        # Create order
+        # Create order in Firestore
         order_ref = db.collection('orders').add({
             'userId': uid,
             'country': country,
             'plan': {
                 'id': plan_id,
-                'name': plan_data.get('name', ''),
-                'data': plan_data.get('data', ''),
-                'validity': plan_data.get('validity', '')
+                'name': plan.get('name', ''),
+                'data': plan.get('volume', 0),
+                'validity': plan.get('duration', 7),
+                'wholesale_price': wholesale_price
             },
             'amount': retail_price,
             'currency': 'USD',
@@ -596,121 +631,207 @@ async def purchase_esim(purchase: PurchasePlan, user: dict = Depends(get_current
             'createdAt': firestore.SERVER_TIMESTAMP
         })
         
-        # 🚀 Purchase eSIM from provider
-        try:
-            purchase_response = requests.post(
-                f"{PROVIDER_API_URL}/purchase",
-                headers={"Authorization": f"Bearer {PROVIDER_API_KEY}"},
-                json={
-                    "plan_id": plan_id,
-                    "country": country,
-                    "user_reference": uid
-                }
-            )
+        # Generate transaction ID
+        transaction_id = f"{uid}_{int(time.time())}"
+        
+        # 🚀 Purchase from eSIM Access
+        purchase_response = requests.post(
+            f"{ESIM_API_URL}/api/v1/OrderProfile",
+            headers=get_esim_auth_headers(),
+            json={
+                "transactionId": transaction_id,
+                "packageInfoList": [
+                    {
+                        "packageCode": plan_id,
+                        "count": 1,
+                        "price": plan.get('price', 0)  # Wholesale price in cents
+                    }
+                ]
+            }
+        )
+        
+        if purchase_response.status_code == 200:
+            purchase_data = purchase_response.json()
             
-            if purchase_response.status_code == 200:
-                esim_data = purchase_response.json()
-                # Store eSIM details
-                esim_ref = db.collection('esims').add({
+            if purchase_data.get('success'):
+                order_no = purchase_data.get('obj', {}).get('orderNo')
+                
+                # Debit wallet
+                user_ref.update({
+                    'walletBalance': firestore.Increment(-retail_price)
+                })
+                
+                # Create transaction record
+                db.collection('transactions').add({
                     'userId': uid,
-                    'orderId': order_ref[1].id,
-                    'country': country,
-                    'plan': plan_data.get('name', ''),
-                    'iccid': esim_data.get('iccid', ''),
-                    'phoneNumber': esim_data.get('phoneNumber', ''),
-                    'qrCode': esim_data.get('qrCode', ''),
-                    'activationCode': esim_data.get('activationCode', ''),
-                    'status': 'active',
-                    'activationDate': datetime.now(),
-                    'expiryDate': datetime.now() + timedelta(days=int(plan_data.get('validity', 7))),
+                    'type': 'debit',
+                    'amount': retail_price,
+                    'currency': 'USD',
+                    'description': f'Purchased eSIM for {country} - {plan.get("name", "Plan")}',
+                    'reference': plan_id,
+                    'status': 'completed',
                     'createdAt': firestore.SERVER_TIMESTAMP
                 })
                 
-                # Update order status
+                # Update order with order number
                 db.collection('orders').document(order_ref[1].id).update({
-                    'status': 'delivered',
-                    'esimId': esim_ref[1].id,
-                    'deliveredAt': firestore.SERVER_TIMESTAMP
+                    'orderNo': order_no,
+                    'transactionId': transaction_id,
+                    'status': 'processing'
                 })
                 
-                # 📧 Send eSIM delivery email via Firestore trigger
-                send_email_trigger(
-                    to=user_data.get('email'),
-                    subject=f"Your eSIM for {country} is Ready! 📱",
-                    html=esim_delivery_email(
-                        user_data.get('displayName', 'Traveler'),
-                        country,
-                        plan_data.get('name', 'Plan'),
-                        esim_data.get('qrCode', ''),
-                        esim_data.get('activationCode', ''),
-                        datetime.now() + timedelta(days=int(plan_data.get('validity', 7)))
-                    )
-                )
+                # Note: eSIM is not delivered instantly
+                # Webhook will notify when eSIM is ready
                 
                 return {
                     "success": True,
                     "order_id": order_ref[1].id,
-                    "esim": {
-                        "iccid": esim_data.get('iccid', ''),
-                        "phoneNumber": esim_data.get('phoneNumber', ''),
-                        "qrCode": esim_data.get('qrCode', ''),
-                        "activationCode": esim_data.get('activationCode', '')
-                    }
+                    "orderNo": order_no,
+                    "status": "processing",
+                    "message": "eSIM is being provisioned. You'll receive a notification when ready."
                 }
             else:
-                # Purchase failed - refund wallet
-                user_ref.update({
-                    'walletBalance': firestore.Increment(retail_price)
-                })
+                # Purchase failed
+                error_msg = purchase_data.get('errorMsg', 'Purchase failed')
                 db.collection('orders').document(order_ref[1].id).update({
-                    'status': 'failed'
+                    'status': 'failed',
+                    'error': error_msg
                 })
-                raise HTTPException(status_code=400, detail="Failed to purchase eSIM from provider")
-        except Exception as e:
-            # Error - refund wallet
+                raise HTTPException(status_code=400, detail=error_msg)
+        else:
+            # API error
+            db.collection('orders').document(order_ref[1].id).update({
+                'status': 'failed',
+                'error': 'Provider API error'
+            })
+            raise HTTPException(status_code=400, detail="Provider API error")
+            
+    except Exception as e:
+        # Try to refund if needed
+        try:
+            user_ref = db.collection('users').document(uid)
             user_ref.update({
                 'walletBalance': firestore.Increment(retail_price)
             })
-            db.collection('orders').document(order_ref[1].id).update({
-                'status': 'failed'
-            })
-            raise HTTPException(status_code=400, detail=f"Provider error: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.get("/api/esim/active")
-async def get_active_esims(user: dict = Depends(get_current_user)):
-    """Get user's active eSIMs"""
-    try:
-        uid = user['uid']
-        esims_ref = db.collection('esims').where('userId', '==', uid).where('status', '==', 'active')
-        esims_docs = esims_ref.get()
-        
-        return [doc.to_dict() for doc in esims_docs]
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@app.get("/api/esim/orders")
-async def get_orders(user: dict = Depends(get_current_user)):
-    """Get user's orders"""
-    try:
-        uid = user['uid']
-        orders_ref = db.collection('orders').where('userId', '==', uid).order_by('createdAt', direction=firestore.Query.DESCENDING)
-        orders_docs = orders_ref.get()
-        
-        return [doc.to_dict() for doc in orders_docs]
-    except Exception as e:
+        except:
+            pass
         raise HTTPException(status_code=400, detail=str(e))
 
 # =====================================================
-# 10. ADMIN ENDPOINTS
+# 11. WEBHOOK FOR eSIM DELIVERY
+# =====================================================
+
+@app.post("/api/webhooks/esim")
+async def esim_webhook(request: Request):
+    """Handle eSIM Access webhook notifications"""
+    try:
+        body = await request.json()
+        print(f"Webhook received: {json.dumps(body)}")
+        
+        event_type = body.get('event')
+        order_no = body.get('orderNo')
+        transaction_id = body.get('transactionId')
+        esim_tran_no = body.get('esimTranNo')
+        
+        if event_type == 'OrderStatus':
+            order_status = body.get('orderStatus')
+            
+            if order_status == 'GOT_RESOURCE':
+                # eSIM is ready! Query allocated profile
+                profile_response = requests.post(
+                    f"{ESIM_API_URL}/api/v1/QueryAllocatedProfiles",
+                    headers=get_esim_auth_headers(),
+                    json={
+                        "orderNo": order_no,
+                        "pager": {"pageNum": 1, "pageSize": 50}
+                    }
+                )
+                
+                if profile_response.status_code == 200:
+                    profile_data = profile_response.json()
+                    if profile_data.get('success'):
+                        profiles = profile_data.get('obj', {}).get('profileList', [])
+                        
+                        if profiles:
+                            profile = profiles[0]
+                            
+                            # Find the order
+                            orders_ref = db.collection('orders').where('orderNo', '==', order_no).limit(1)
+                            orders = orders_ref.get()
+                            order_doc = None
+                            user_id = None
+                            user_email = None
+                            user_name = "Traveler"
+                            
+                            for doc in orders:
+                                order_doc = doc
+                                user_id = doc.to_dict().get('userId')
+                                break
+                            
+                            if order_doc and user_id:
+                                # Get user email
+                                user_ref = db.collection('users').document(user_id)
+                                user_doc = user_ref.get()
+                                if user_doc.exists:
+                                    user_data = user_doc.to_dict()
+                                    user_email = user_data.get('email')
+                                    user_name = user_data.get('displayName', 'Traveler')
+                                
+                                # Store eSIM details
+                                esim_ref = db.collection('esims').add({
+                                    'userId': user_id,
+                                    'orderId': order_doc.id,
+                                    'country': order_doc.to_dict().get('country', ''),
+                                    'plan': order_doc.to_dict().get('plan', {}).get('name', ''),
+                                    'orderNo': order_no,
+                                    'transactionId': transaction_id,
+                                    'esimTranNo': esim_tran_no,
+                                    'iccid': profile.get('iccid'),
+                                    'qrCodeUrl': profile.get('qrCodeUrl'),
+                                    'ac': profile.get('ac'),
+                                    'status': 'active',
+                                    'activationDate': datetime.now(),
+                                    'expiryDate': datetime.now() + timedelta(days=30),
+                                    'createdAt': firestore.SERVER_TIMESTAMP
+                                })
+                                
+                                # Update order status
+                                db.collection('orders').document(order_doc.id).update({
+                                    'status': 'delivered',
+                                    'esimId': esim_ref[1].id,
+                                    'deliveredAt': firestore.SERVER_TIMESTAMP
+                                })
+                                
+                                # Send email with QR code
+                                if user_email:
+                                    send_email_trigger(
+                                        to=user_email,
+                                        subject=f"Your eSIM is Ready! 📱",
+                                        html=esim_delivery_email(
+                                            user_name,
+                                            order_doc.to_dict().get('country', ''),
+                                            order_doc.to_dict().get('plan', {}).get('name', 'Plan'),
+                                            profile.get('qrCodeUrl', ''),
+                                            profile.get('ac', ''),
+                                            datetime.now() + timedelta(days=30)
+                                        )
+                                    )
+                                
+                                return {"success": True}
+        
+        return {"success": True}
+        
+    except Exception as e:
+        print(f"Webhook error: {e}")
+        return {"success": False}
+
+# =====================================================
+# 12. ADMIN ENDPOINTS
 # =====================================================
 
 @app.get("/api/admin/dashboard")
 async def admin_dashboard(user: dict = Depends(get_current_user)):
-    """Admin dashboard statistics"""
     try:
-        # Check if user is admin
         uid = user['uid']
         user_ref = db.collection('users').document(uid)
         user_doc = user_ref.get()
@@ -718,7 +839,6 @@ async def admin_dashboard(user: dict = Depends(get_current_user)):
         if not user_doc.exists or user_doc.to_dict().get('role') != 'admin':
             raise HTTPException(status_code=403, detail="Admin access required")
         
-        # Get statistics
         users = db.collection('users').get()
         orders = db.collection('orders').get()
         pending_orders = db.collection('orders').where('status', '==', 'pending').get()
@@ -726,10 +846,13 @@ async def admin_dashboard(user: dict = Depends(get_current_user)):
         esims = db.collection('esims').get()
         payments = db.collection('paymentRequests').where('status', '==', 'pending').get()
         
-        # Calculate revenue
         total_revenue = 0
         for order in orders:
             total_revenue += order.to_dict().get('amount', 0)
+        
+        # Also get provider balance
+        provider_balance_response = await get_provider_balance(user)
+        provider_balance = provider_balance_response.get('balance', 0) if provider_balance_response.get('success') else 0
         
         return {
             "totalUsers": len(users),
@@ -738,16 +861,15 @@ async def admin_dashboard(user: dict = Depends(get_current_user)):
             "deliveredOrders": len(delivered_orders),
             "totalEsims": len(esims),
             "totalRevenue": total_revenue,
-            "pendingPayments": len(payments)
+            "pendingPayments": len(payments),
+            "providerBalance": provider_balance
         }
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/admin/users")
 async def get_all_users(user: dict = Depends(get_current_user)):
-    """Get all users (admin only)"""
     try:
-        # Check if user is admin
         uid = user['uid']
         user_ref = db.collection('users').document(uid)
         user_doc = user_ref.get()
@@ -764,9 +886,7 @@ async def get_all_users(user: dict = Depends(get_current_user)):
 
 @app.get("/api/admin/payment-requests")
 async def get_payment_requests(user: dict = Depends(get_current_user)):
-    """Get all payment requests (admin only)"""
     try:
-        # Check if user is admin
         uid = user['uid']
         user_ref = db.collection('users').document(uid)
         user_doc = user_ref.get()
@@ -783,9 +903,7 @@ async def get_payment_requests(user: dict = Depends(get_current_user)):
 
 @app.post("/api/admin/verify-payment")
 async def verify_manual_payment(data: dict, user: dict = Depends(get_current_user)):
-    """Verify manual payment (admin only)"""
     try:
-        # Check if user is admin
         uid = user['uid']
         user_ref = db.collection('users').document(uid)
         user_doc = user_ref.get()
@@ -794,7 +912,7 @@ async def verify_manual_payment(data: dict, user: dict = Depends(get_current_use
             raise HTTPException(status_code=403, detail="Admin access required")
         
         payment_id = data.get('payment_id')
-        status = data.get('status')  # 'approved' or 'rejected'
+        status = data.get('status')
         
         payment_ref = db.collection('paymentRequests').document(payment_id)
         payment_doc = payment_ref.get()
@@ -805,7 +923,6 @@ async def verify_manual_payment(data: dict, user: dict = Depends(get_current_use
         payment_data = payment_doc.to_dict()
         
         if status == 'approved':
-            # Credit wallet
             amount = payment_data.get('amount', 0)
             user_id = payment_data.get('userId')
             
@@ -814,19 +931,17 @@ async def verify_manual_payment(data: dict, user: dict = Depends(get_current_use
                 'walletBalance': firestore.Increment(amount)
             })
             
-            # Create transaction
             db.collection('transactions').add({
                 'userId': user_id,
                 'type': 'credit',
                 'amount': amount,
                 'currency': payment_data.get('currency', 'USD'),
-                'description': f'Manual payment approved by admin',
+                'description': 'Manual payment approved by admin',
                 'reference': payment_id,
                 'status': 'completed',
                 'createdAt': firestore.SERVER_TIMESTAMP
             })
         
-        # Update payment request
         payment_ref.update({
             'status': status,
             'verifiedAt': firestore.SERVER_TIMESTAMP,
@@ -838,11 +953,10 @@ async def verify_manual_payment(data: dict, user: dict = Depends(get_current_use
         raise HTTPException(status_code=400, detail=str(e))
 
 # =====================================================
-# 11. EMAIL FUNCTIONS (Firestore Trigger)
+# 13. EMAIL FUNCTIONS (Firestore Trigger)
 # =====================================================
 
 def send_email_trigger(to: str, subject: str, html: str):
-    """Add email to Firestore for Trigger Email extension"""
     try:
         db.collection('mail').add({
             'to': [to],
@@ -859,12 +973,11 @@ def send_email_trigger(to: str, subject: str, html: str):
         return False
 
 # =====================================================
-# 12. EMAIL TEMPLATES
+# 14. EMAIL TEMPLATES
 # =====================================================
 
 def welcome_email_template(name: str):
-    return f"""
-    <!DOCTYPE html>
+    return f"""<!DOCTYPE html>
     <html>
     <head>
         <style>
@@ -876,7 +989,6 @@ def welcome_email_template(name: str):
             .content {{ padding: 30px 0; }}
             .button {{ display: inline-block; padding: 12px 30px; background: linear-gradient(135deg, #F59E0B, #D97706); color: #0A1628; text-decoration: none; border-radius: 8px; font-weight: 600; }}
             .footer {{ text-align: center; padding-top: 30px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 12px; color: #64748B; }}
-            .brand {{ color: #F59E0B; }}
         </style>
     </head>
     <body>
@@ -891,7 +1003,7 @@ def welcome_email_template(name: str):
                 <p>Your gateway to affordable global connectivity.</p>
                 <p>Get started by exploring our plans for 200+ countries at unbeatable prices.</p>
                 <br>
-                <center><a href="#" class="button">Explore eSIMs</a></center>
+                <center><a href="https://esmnst-frontend.onrender.com" class="button">Explore eSIMs</a></center>
                 <br>
                 <p>Need help? Reply to this email or visit our FAQ.</p>
                 <p>Happy travels!</p>
@@ -902,12 +1014,10 @@ def welcome_email_template(name: str):
             </div>
         </div>
     </body>
-    </html>
-    """
+    </html>"""
 
 def payment_confirmation_email(name: str, amount: float, method: str):
-    return f"""
-    <!DOCTYPE html>
+    return f"""<!DOCTYPE html>
     <html>
     <head>
         <style>
@@ -935,7 +1045,7 @@ def payment_confirmation_email(name: str, amount: float, method: str):
                 <div class="amount">${amount:.2f}</div>
                 <p>Your wallet has been credited. You can now purchase eSIMs for your travels.</p>
                 <br>
-                <center><a href="#" class="button">View Wallet</a></center>
+                <center><a href="https://esmnst-frontend.onrender.com/wallet" class="button">View Wallet</a></center>
                 <br>
                 <p>Safe travels!</p>
             </div>
@@ -945,12 +1055,10 @@ def payment_confirmation_email(name: str, amount: float, method: str):
             </div>
         </div>
     </body>
-    </html>
-    """
+    </html>"""
 
 def esim_delivery_email(name: str, country: str, plan: str, qr_code: str, activation_code: str, expiry_date):
-    return f"""
-    <!DOCTYPE html>
+    return f"""<!DOCTYPE html>
     <html>
     <head>
         <style>
@@ -987,10 +1095,7 @@ def esim_delivery_email(name: str, country: str, plan: str, qr_code: str, activa
                 <div class="qr-box">
                     <p><strong>📋 Scan this QR Code:</strong></p>
                     <div style="background: white; padding: 20px; display: inline-block; border-radius: 8px;">
-                        <!-- In production, this would be an actual QR code image -->
-                        <div style="width: 150px; height: 150px; background: #000; margin: 0 auto; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 10px; word-break: break-all; padding: 10px;">
-                            {qr_code[:50]}...
-                        </div>
+                        <img src="{qr_code}" alt="QR Code" style="width: 150px; height: 150px;">
                     </div>
                 </div>
                 
@@ -1000,7 +1105,7 @@ def esim_delivery_email(name: str, country: str, plan: str, qr_code: str, activa
                 </div>
                 
                 <br>
-                <center><a href="#" class="button">View My eSIMs</a></center>
+                <center><a href="https://esmnst-frontend.onrender.com/esims" class="button">View My eSIMs</a></center>
                 
                 <br>
                 <p><strong>How to install:</strong></p>
@@ -1019,16 +1124,13 @@ def esim_delivery_email(name: str, country: str, plan: str, qr_code: str, activa
             </div>
         </div>
     </body>
-    </html>
-    """
+    </html>"""
 
 # =====================================================
-# 13. PAYMENT GATEWAY HELPERS (Simplified)
+# 15. PAYMENT GATEWAY HELPERS (Simplified)
 # =====================================================
 
 def create_razorpay_order(amount: float, currency: str = 'USD'):
-    """Create a Razorpay order"""
-    # In production, implement actual Razorpay API call
     return {
         'id': 'order_' + secrets.token_hex(8),
         'amount': int(amount * 100),
@@ -1036,8 +1138,6 @@ def create_razorpay_order(amount: float, currency: str = 'USD'):
     }
 
 def create_paypal_order(amount: float, currency: str = 'USD'):
-    """Create a PayPal order"""
-    # In production, implement actual PayPal API call
     return {
         'id': 'PAY-' + secrets.token_hex(8),
         'amount': amount,
@@ -1045,22 +1145,17 @@ def create_paypal_order(amount: float, currency: str = 'USD'):
     }
 
 def verify_razorpay_payment(data: dict):
-    """Verify Razorpay payment signature"""
-    # In production, implement actual verification
     return True
 
 def verify_paypal_payment(data: dict):
-    """Verify PayPal payment"""
-    # In production, implement actual verification
     return True
 
 # =====================================================
-# 14. HEALTH CHECK
+# 16. HEALTH CHECK
 # =====================================================
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint"""
     return {
         "status": "healthy",
         "service": "eSIMNest API",
@@ -1071,7 +1166,7 @@ async def health_check():
     }
 
 # =====================================================
-# 15. RUN
+# 17. RUN
 # =====================================================
 
 if __name__ == "__main__":
