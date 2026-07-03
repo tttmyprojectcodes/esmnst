@@ -32,7 +32,7 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final response = await http.get(
-        Uri.parse('$baseUrl/esim/countries'),
+        Uri.parse('$baseUrl/esim/countries'),  // ✅ Uses baseUrl from environment
         headers: headers,
       );
       
