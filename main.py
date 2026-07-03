@@ -64,7 +64,7 @@ except Exception as e:
 ESIM_ACCESS_CODE = os.getenv('ESIM_ACCESS_CODE')
 ESIM_SECRET_KEY = os.getenv('ESIM_SECRET_KEY')
 ESIM_API_URL = os.getenv('ESIM_API_URL', 'https://api.esimaccess.com')
-MARKUP_MULTIPLIER = float(os.getenv('MARKUP_MULTIPLIER', '2.0'))
+MARKUP_MULTIPLIER = float(os.getenv('MARKUP_MULTIPLIER', '2.1'))
 
 # =====================================================
 # 4. eSIM ACCESS AUTHENTICATION
@@ -163,6 +163,62 @@ def generate_referral_code():
 # =====================================================
 # 11.5 SIMPLE WEBHOOK (For eSIM Access)
 # =====================================================
+
+
+# =====================================================
+# DEBUG ENDPOINTS - No Auth Required
+# =====================================================
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "message": "eSIMNest API is running!",
+        "version": "1.0.0",
+        "routes": [
+            "/",
+            "/api/health",
+            "/api/test",
+            "/api/debug",
+            "/api/esim/countries",
+            "/api/esim/plans",
+            "/api/esim/purchase",
+            "/api/auth/register"
+        ]
+    }
+
+@app.get("/api/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "service": "eSIMNest API",
+        "version": "1.0.0",
+        "brand": "eSIMNest",
+        "slogan": "Global Data eSIM",
+        "company": "Tech Talk Titans"
+    }
+
+@app.get("/api/test")
+async def test():
+    """Simple test endpoint"""
+    return {"status": "ok", "message": "Backend is working!"}
+
+@app.get("/api/debug")
+async def debug():
+    """Debug endpoint showing environment"""
+    return {
+        "esim_access_code_set": bool(ESIM_ACCESS_CODE),
+        "esim_secret_key_set": bool(ESIM_SECRET_KEY),
+        "markup": MARKUP_MULTIPLIER,
+        "api_url": ESIM_API_URL
+    }
+
+# =====================================================
+# REST OF YOUR CODE BELOW...
+# =====================================================
+
+
 
 @app.post("/webhook")
 async def simple_webhook(request: Request):
