@@ -5,11 +5,13 @@ import 'dart:convert';
 class ApiService {
   static const String baseUrl = 'https://esmnst-backend.onrender.com/api';
   
-  // Get auth token
+  // Get auth token - FIXED nullable issue
   static Future<String> _getToken() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('User not authenticated');
-    return await user.getIdToken();
+    final String? token = await user.getIdToken();
+    if (token == null) throw Exception('Failed to get token');
+    return token;  // ✅ Now returns non-nullable String
   }
 
   // Get headers with auth token
