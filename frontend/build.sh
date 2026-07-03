@@ -1,22 +1,22 @@
 #!/bin/bash
 
-# Install Flutter if not installed
-if ! command -v flutter &> /dev/null; then
-    echo "Installing Flutter..."
-    apt-get update && apt-get install -y curl unzip git
-    git clone https://github.com/flutter/flutter.git -b stable /flutter
-    export PATH="/flutter/bin:$PATH"
-fi
+# Exit on error
+set -e
 
-# Navigate to frontend directory
-cd frontend
+echo "Installing Flutter..."
+apt-get update && apt-get install -y curl unzip git
 
-# Get dependencies
+# Clone Flutter
+git clone https://github.com/flutter/flutter.git -b stable /flutter
+export PATH="/flutter/bin:$PATH"
+
+# Verify Flutter installation
+flutter --version
+
 echo "Getting dependencies..."
 flutter pub get
 
-# Build web app
 echo "Building web app..."
 flutter build web --release --dart-define=API_URL=https://esmnst-backend.onrender.com
 
-echo "Build complete! Files are in frontend/build/web"
+echo "Build complete! Files are in build/web"
