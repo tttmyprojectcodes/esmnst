@@ -50,8 +50,6 @@ void main() async {
     ),
   );
   
-  await GoogleSignIn.initialize();
-  
   runApp(const MyApp());
 }
 
