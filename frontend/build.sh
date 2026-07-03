@@ -21,4 +21,19 @@ flutter build web --release \
   --dart-define=FIREBASE_MESSAGING_SENDER_ID="$FIREBASE_MESSAGING_SENDER_ID" \
   --dart-define=FIREBASE_APP_ID="$FIREBASE_APP_ID"
 
+# ✅ Explicitly copy assets to build/web
+echo "Copying assets to build/web..."
+mkdir -p build/web/assets/images
+cp -r assets/images/* build/web/assets/images/ 2>/dev/null || true
+
+# Also copy from parent assets if it exists
+if [ -d "../assets/images" ]; then
+    echo "Copying assets from parent folder..."
+    cp -r ../assets/images/* build/web/assets/images/ 2>/dev/null || true
+fi
+
+# Verify assets were copied
+echo "Assets in build/web/assets/images:"
+ls -la build/web/assets/images/ || echo "No assets found!"
+
 echo "Build complete! Files are in build/web"
