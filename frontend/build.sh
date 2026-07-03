@@ -1,17 +1,18 @@
 #!/bin/bash
-
-# Exit on error
 set -e
 
-echo "Installing Flutter..."
-apt-get update && apt-get install -y curl unzip git
+echo "Installing Flutter in user space..."
 
-# Clone Flutter
-git clone https://github.com/flutter/flutter.git -b stable /flutter
-export PATH="/flutter/bin:$PATH"
+# Install Flutter in a writable directory
+cd /tmp
+git clone --depth 1 https://github.com/flutter/flutter.git -b stable
+export PATH="/tmp/flutter/bin:$PATH"
 
 # Verify Flutter installation
 flutter --version
+
+# Navigate back to frontend directory
+cd /opt/render/project/src/frontend
 
 echo "Getting dependencies..."
 flutter pub get
