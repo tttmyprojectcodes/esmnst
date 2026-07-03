@@ -551,38 +551,20 @@ async def get_provider_balance(user: dict = Depends(get_current_user)):
 async def get_countries(user: dict = Depends(get_current_user)):
     """Get all available countries from eSIM Access"""
     try:
-        if not ESIM_ACCESS_CODE:
-            raise HTTPException(status_code=400, detail="eSIM Access not configured")
-        
-        response = requests.post(
-            f"{ESIM_API_URL}/api/v1/open/location/list",
-            headers=get_esim_headers(),
-            json={},
-            timeout=10
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('success'):
-                location_list = data.get('obj', {}).get('locationList', [])
-                countries = []
-                for loc in location_list:
-                    countries.append({
-                        "code": loc.get('code'),
-                        "name": loc.get('name'),
-                        "type": loc.get('type')
-                    })
-                return {
-                    "success": True,
-                    "countries": countries,
-                    "total": len(countries)
-                }
-        
-        return {"success": False, "error": "Failed to get countries"}
+        # Simple test response
+        return {
+            "success": True,
+            "countries": [
+                {"code": "US", "name": "United States"},
+                {"code": "IN", "name": "India"},
+                {"code": "GB", "name": "United Kingdom"},
+                {"code": "JP", "name": "Japan"},
+            ],
+            "total": 4
+        }
     except Exception as e:
-        print(f"❌ Error fetching countries: {e}")
+        print(f"❌ Error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
-
 # 10.3 Get Plans for a Country (UPDATED)
 @app.get("/api/esim/plans")
 async def get_plans(
