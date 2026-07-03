@@ -10,7 +10,6 @@ services:
         value: 3.11.11
       - key: ALLOWED_ORIGINS
         value: https://esmnst-frontend.onrender.com,http://localhost:3000
-    # rootDir: backend  # REMOVE THIS LINE
 
   # Frontend Static Site
   - type: web
@@ -24,4 +23,16 @@ services:
     envVars:
       - key: API_URL
         value: https://esmnst-backend.onrender.com
+      - key: FIREBASE_API_KEY
+        value: ${FIREBASE_API_KEY}
+      - key: FIREBASE_AUTH_DOMAIN
+        value: ${FIREBASE_AUTH_DOMAIN}
+      - key: FIREBASE_PROJECT_ID
+        value: ${FIREBASE_PROJECT_ID}
+      - key: FIREBASE_STORAGE_BUCKET
+        value: ${FIREBASE_STORAGE_BUCKET}
+      - key: FIREBASE_MESSAGING_SENDER_ID
+        value: ${FIREBASE_MESSAGING_SENDER_ID}
+      - key: FIREBASE_APP_ID
+        value: ${FIREBASE_APP_ID}
     rootDir: .
