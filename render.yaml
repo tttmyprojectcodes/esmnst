@@ -10,7 +10,7 @@ services:
         value: 3.11.11
       - key: ALLOWED_ORIGINS
         value: https://esmnst-frontend.onrender.com,http://localhost:3000
-    rootDir: backend
+    # rootDir: backend  # REMOVE THIS LINE
 
   # Frontend Static Site
   - type: web
