@@ -3,11 +3,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class ApiService {
-  // ✅ Read from environment variable passed via --dart-define
-  static const String baseUrl = String.fromEnvironment(
-    'API_URL',
-    defaultValue: 'https://esmnst-backend.onrender.com/api',
-  );
+  // ✅ HARDCODE the correct URL - THIS WILL WORK
+  static const String baseUrl = 'https://esmnst-backend.onrender.com/api';
   
   // Get auth token
   static Future<String> _getToken() async {
@@ -32,9 +29,12 @@ class ApiService {
     try {
       final headers = await _getHeaders();
       final response = await http.get(
-        Uri.parse('$baseUrl/esim/countries'),  // ✅ Uses baseUrl from environment
+        Uri.parse('$baseUrl/esim/countries'),
         headers: headers,
       );
+      
+      print('🌍 Countries response status: ${response.statusCode}');
+      print('🌍 Countries response body: ${response.body}');
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -44,7 +44,7 @@ class ApiService {
       }
       return [];
     } catch (e) {
-      print('Error fetching countries: $e');
+      print('❌ Error fetching countries: $e');
       return [];
     }
   }
