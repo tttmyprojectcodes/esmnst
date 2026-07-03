@@ -11,3 +11,20 @@ services:
       - key: ALLOWED_ORIGINS
         value: https://esmnst-frontend.onrender.com,http://localhost:3000
     rootDir: backend
+
+  # Frontend Static Site
+  - type: web
+    name: esmnst-frontend
+    env: static
+    buildCommand: |
+      apt-get update && apt-get install -y curl unzip git
+      git clone https://github.com/flutter/flutter.git -b stable /flutter
+      export PATH="/flutter/bin:$PATH"
+      cd frontend
+      flutter pub get
+      flutter build web --release --dart-define=API_URL=https://esmnst-backend.onrender.com
+    staticPublishPath: frontend/build/web
+    envVars:
+      - key: API_URL
+        value: https://esmnst-backend.onrender.com
+    rootDir: .
