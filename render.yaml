@@ -4,13 +4,13 @@ services:
     name: esmnst-backend
     env: python
     buildCommand: pip install -r backend/requirements.txt
-    startCommand: uvicorn src.main:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.11
       - key: ALLOWED_ORIGINS
         value: https://esmnst-frontend.onrender.com,http://localhost:3000
-    rootDir: backend  # ✅ This tells Render to look inside the backend folder
+    rootDir: backend
 
   # Frontend Static Site
   - type: web
