@@ -11,14 +11,3 @@ services:
       - key: ALLOWED_ORIGINS
         value: https://esmnst-frontend.onrender.com,http://localhost:3000
     rootDir: backend
-
-  # Frontend Static Site
-  - type: web
-    name: esmnst-frontend
-    env: static
-    buildCommand: ./frontend/build.sh
-    staticPublishPath: frontend/build/web  # ✅ RELATIVE PATH
-    envVars:
-      - key: API_URL
-        value: https://esmnst-backend.onrender.com
-    rootDir: .
