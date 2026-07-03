@@ -510,9 +510,17 @@ class _LoginScreenState extends State<LoginScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text(
-                    '🌍',
-                    style: TextStyle(fontSize: 48),
+                  Image.asset(
+                    'assets/images/logo.png',
+                    width: 80,
+                    height: 80,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Icon(
+                        Icons.sim_card,
+                        color: Color(0xFFF59E0B),
+                        size: 50,
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
                   const Text(
@@ -828,9 +836,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
             padding: const EdgeInsets.all(24),
             child: Column(
               children: [
-                const Text(
-                  '🌍',
-                  style: TextStyle(fontSize: 40),
+                Image.asset(
+                  'assets/images/logo.png',
+                  width: 60,
+                  height: 60,
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Icon(
+                      Icons.sim_card,
+                      color: Color(0xFFF59E0B),
+                      size: 40,
+                    );
+                  },
                 ),
                 const SizedBox(height: 8),
                 const Text(
@@ -1364,26 +1380,45 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        title: Row(
           children: [
-            Text(
-              brandName,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Color(0xFFF59E0B),
-              ),
+            Image.asset(
+              'assets/images/logo.png',
+              width: 32,
+              height: 32,
+              errorBuilder: (context, error, stackTrace) {
+                return const Icon(
+                  Icons.sim_card,
+                  color: Color(0xFFF59E0B),
+                  size: 28,
+                );
+              },
             ),
-            const Text(
-              brandSlogan,
-              style: TextStyle(
-                fontSize: 10,
-                color: Color(0xFF94A3B8),
-              ),
-            ),
-          ],
-        ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  brandName,
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFFF59E0B),
+                  ),
+                ),
+                const Text(
+                  brandSlogan,
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Color(0xFF94A3B8),
+                 ),
+               ),
+             ],
+           ),
+         ],
+       ),
+       // ...
+    ),
         actions: [
           IconButton(
             icon: const Icon(Icons.notifications_outlined),
