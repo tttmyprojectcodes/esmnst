@@ -196,7 +196,6 @@ async def debug():
     """Debug endpoint showing environment"""
     return {
         "esim_access_code_set": bool(ESIM_ACCESS_CODE),
-        "esim_secret_key_set": bool(ESIM_SECRET_KEY),
         "markup": MARKUP_MULTIPLIER,
         "api_url": ESIM_API_URL
     }
@@ -1266,8 +1265,8 @@ async def test_esim_endpoint():
     return {
         "status": "ok",
         "message": "eSIM endpoint is reachable",
-        "esim_access_code_set": bool(ESIM_ACCESS_CODE),
-        "esim_secret_key_set": bool(ESIM_SECRET_KEY)
+        "esim_access_code_set": bool(ESIM_ACCESS_CODE)
+        # ✅ Removed esim_secret_key_set
     }
 
 
