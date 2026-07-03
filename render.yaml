@@ -1,20 +1,36 @@
+# render.yaml
 services:
+  # Backend API Service
+  - type: web
+    name: esmnst-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: ALLOWED_ORIGINS
+        value: https://esmnst-frontend.onrender.com,http://localhost:3000
+    rootDir: backend
+
+  # Frontend Static Site
   - type: web
     name: esmnst-frontend
     env: static
     buildCommand: |
-      curl -sS https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -o tools.zip
-      unzip tools.zip
-      mv cmdline-tools tools
-      echo 'export PATH="$PATH:`pwd`/tools/bin"' >> ~/.bashrc
-      ./tools/bin/sdkmanager "platforms;android-34" "build-tools;34.0.0"
-      git clone https://github.com/flutter/flutter.git -b stable
-      export PATH="$PATH:`pwd`/flutter/bin"
+      # Install Flutter
+      apt-get update && apt-get install -y curl unzip git
+      git clone https://github.com/flutter/flutter.git -b stable /flutter
+      export PATH="/flutter/bin:$PATH"
+      
+      # Build the web app
+      cd frontend
       flutter pub get
-      flutter build web --release
-      mkdir -p /opt/render/static
-      cp -r build/web/* /opt/render/static
-    staticPublishPath: /opt/render/static
+      flutter build web --release --dart-define=API_URL=https://esmnst-backend.onrender.com
+      mkdir -p /opt/render/project/src/build
+      cp -r build/web/* /opt/render/project/src/build/
+    staticPublishPath: /opt/render/project/src/build
     envVars:
       - key: API_URL
-        value: https://esmnst.onrender.com
+        value: https://esmnst-backend.onrender.com
+    rootDir: .
