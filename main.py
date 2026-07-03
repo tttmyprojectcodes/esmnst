@@ -160,6 +160,34 @@ def generate_referral_code():
 # 7. AUTHENTICATION ENDPOINTS
 # =====================================================
 
+# =====================================================
+# 11.5 SIMPLE WEBHOOK (For eSIM Access)
+# =====================================================
+
+@app.post("/webhook")
+async def simple_webhook(request: Request):
+    """Simple webhook endpoint for eSIM Access"""
+    try:
+        # Get the raw body
+        body = await request.body()
+        print(f"📨 Webhook received at /webhook")
+        print(f"Headers: {request.headers}")
+        print(f"Body: {body}")
+        
+        # Try to parse as JSON
+        try:
+            data = json.loads(body)
+            print(f"JSON data: {data}")
+        except:
+            print("Body is not JSON")
+        
+        # Always return 200 to acknowledge receipt
+        return {"status": "received", "timestamp": datetime.now().isoformat()}
+    except Exception as e:
+        print(f"❌ Webhook error: {e}")
+        return {"status": "error", "message": str(e)}
+
+
 @app.post("/api/auth/register")
 async def register_user(user_data: UserRegister):
     try:
