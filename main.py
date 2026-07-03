@@ -1274,6 +1274,21 @@ async def test_esim_endpoint():
 # 17. RUN
 # =====================================================
 
+# =====================================================
+# TEST: List all registered routes
+# =====================================================
+
+@app.get("/api/routes")
+async def list_routes():
+    """List all registered routes for debugging"""
+    routes = []
+    for route in app.routes:
+        routes.append({
+            "path": route.path,
+            "methods": [m for m in route.methods] if hasattr(route, 'methods') else []
+        })
+    return {"routes": routes}
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
