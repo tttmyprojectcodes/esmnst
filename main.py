@@ -1194,6 +1194,30 @@ async def health_check():
     }
 
 # =====================================================
+# TEST ENDPOINT - To verify backend is working
+# =====================================================
+
+@app.get("/api/test")
+async def test_endpoint():
+    """Simple test endpoint to verify backend is running"""
+    return {
+        "status": "ok",
+        "message": "Backend is working!",
+        "timestamp": datetime.now().isoformat()
+    }
+
+@app.get("/api/esim/test")
+async def test_esim_endpoint():
+    """Test eSIM endpoint without auth"""
+    return {
+        "status": "ok",
+        "message": "eSIM endpoint is reachable",
+        "esim_access_code_set": bool(ESIM_ACCESS_CODE),
+        "esim_secret_key_set": bool(ESIM_SECRET_KEY)
+    }
+
+
+# =====================================================
 # 17. RUN
 # =====================================================
 
