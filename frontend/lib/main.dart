@@ -31,6 +31,9 @@ const String websiteUrl = 'www.esimnest.com';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await dotenv.load(fileName: ".env");
+  
   final String apiKey = const String.fromEnvironment('FIREBASE_API_KEY');
   final String authDomain = const String.fromEnvironment('FIREBASE_AUTH_DOMAIN');
   final String projectId = const String.fromEnvironment('FIREBASE_PROJECT_ID');
