@@ -312,7 +312,7 @@ class MyApp extends StatelessWidget {
 // 3. AUTH WRAPPER
 // =====================================================
 
- AuthWrapper extends StatelessWidget {
+ class AuthWrapper extends StatelessWidget {
   const AuthWrapper({super.key});
 
   @override
