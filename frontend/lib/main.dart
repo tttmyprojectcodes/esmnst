@@ -366,10 +366,18 @@ class SplashScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-                child: const Center(
-                  child: Text(
-                    '🌍',
-                    style: TextStyle(fontSize: 50),
+                child: Center(
+                  child: Image.asset(
+                    'assets/images/logo.png',
+                    width: 80,
+                    height: 80,
+                    errorBuilder: (context, error, stackTrace) {
+                      return const Icon(
+                        Icons.sim_card,
+                        color: Color(0xFFF59E0B),
+                        size: 50,
+                      );
+                    },
                   ),
                 ),
               ),
