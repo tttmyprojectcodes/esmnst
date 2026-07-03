@@ -1835,7 +1835,21 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showCountrySelection(BuildContext context) {
+  void _showCountrySelection(BuildContext context) async {
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+  
+    // Fetch countries from API
+    final countries = await ApiService.getCountries();
+  
+    Navigator.pop(context); // Close loading dialog
+  
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1878,21 +1892,22 @@ class _HomeScreenState extends State<HomeScreen> {
                 filled: true,
                 fillColor: Colors.white.withOpacity(0.05),
               ),
+              onChanged: (value) {
+                // Filter countries based on search
+              },
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: ListView(
+              child: ListView.builder(
                 shrinkWrap: true,
-                children: [
-                  _buildCountryTile('🇪🇺', 'Europe'),
-                  _buildCountryTile('🇺🇸', 'USA'),
-                  _buildCountryTile('🇮🇳', 'India'),
-                  _buildCountryTile('🇯🇵', 'Japan'),
-                  _buildCountryTile('🇦🇪', 'UAE'),
-                  _buildCountryTile('🇬🇧', 'UK'),
-                  _buildCountryTile('🇸🇬', 'Singapore'),
-                  _buildCountryTile('🇦🇺', 'Australia'),
-                ],
+                itemCount: countries.length,
+                itemBuilder: (context, index) {
+                  final country = countries[index];
+                  return _buildCountryTile(
+                    country['code'] ?? '',
+                    country['name'] ?? 'Unknown',
+                  );
+                },
               ),
             ),
           ],
@@ -1900,7 +1915,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
   Widget _buildCountryTile(String flag, String name) {
     return ListTile(
       leading: Text(flag, style: const TextStyle(fontSize: 28)),
@@ -1913,7 +1927,28 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _showPlanSelection(BuildContext context, String country) {
+  void _showPlanSelection(BuildContext context, String country) async {
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(
+        child: CircularProgressIndicator(),
+      ),
+    );
+
+    // Fetch plans from API
+    final plans = await ApiService.getPlans(country: country);
+  
+    Navigator.pop(context); // Close loading dialog
+
+    if (plans.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No plans available for this country')),
+      );
+      return;
+    }
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -1964,15 +1999,20 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 16),
             Expanded(
-              child: ListView(
+              child: ListView.builder(
                 shrinkWrap: true,
-                children: [
-                  _buildPlanCard('1GB', '7 Days', '\$10.00', country),
-                  _buildPlanCard('2GB', '10 Days', '\$18.00', country),
-                  _buildPlanCard('3GB', '15 Days', '\$25.00', country),
-                  _buildPlanCard('5GB', '30 Days', '\$40.00', country),
-                  _buildPlanCard('10GB', '30 Days', '\$70.00', country),
-                ],
+                itemCount: plans.length,
+                itemBuilder: (context, index) {
+                  final plan = plans[index];
+                  return _buildPlanCardReal(
+                    plan['name'] ?? 'Plan',
+                    '${plan['data'] ?? 0}GB',
+                    '${plan['validity'] ?? 0} Days',
+                    '\$${plan['price']?.toStringAsFixed(2) ?? '0.00'}',
+                    country,
+                    plan['id'] ?? '',
+                  );
+                },
               ),
             ),
           ],
@@ -1980,8 +2020,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-  Widget _buildPlanCard(String data, String validity, String price, String country) {
+  Widget _buildPlanCardReal(String name, String data, String validity, String price, String country, String planId) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -2018,14 +2057,14 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  '$data Data',
+                  name,
                   style: const TextStyle(
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                   ),
                 ),
                 Text(
-                  '$validity validity',
+                  '$data • $validity',
                   style: const TextStyle(
                     color: Color(0xFF94A3B8),
                     fontSize: 12,
@@ -2048,7 +2087,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ElevatedButton(
                 onPressed: () {
                   Navigator.pop(context);
-                  _confirmPurchase(context, country, data, price);
+                  _confirmPurchaseReal(context, country, name, price, planId);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFF59E0B),
@@ -2074,8 +2113,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
-  void _confirmPurchase(BuildContext context, String country, String data, String price) {
+  void _confirmPurchaseReal(BuildContext context, String country, String planName, String price, String planId) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -2086,7 +2124,7 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('🌍 $country'),
-            Text('📶 $data'),
+            Text('📶 $planName'),
             Text('💰 $price'),
             const SizedBox(height: 16),
             const Text(
@@ -2101,9 +2139,43 @@ class _HomeScreenState extends State<HomeScreen> {
             child: const Text('Cancel'),
           ),
           ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _showPurchaseSuccess(context);
+            onPressed: () async {
+              Navigator.pop(context); // Close dialog
+              
+              // Show loading
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (context) => const Center(
+                  child: CircularProgressIndicator(),
+                ),
+              );
+              
+              try {
+                // Real purchase
+                final result = await ApiService.purchasePlan(planId, country);
+                
+                Navigator.pop(context); // Close loading
+                
+                if (result['success'] == true) {
+                  _showPurchaseSuccess(context);
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(result['error'] ?? 'Purchase failed'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              } catch (e) {
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Error: $e'),
+                    backgroundColor: Colors.red,
+                  ),
+                );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFF59E0B),
@@ -2115,7 +2187,6 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-
   void _showPurchaseSuccess(BuildContext context) {
     showDialog(
       context: context,
