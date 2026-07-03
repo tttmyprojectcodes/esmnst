@@ -10,7 +10,7 @@ services:
         value: 3.11.11
       - key: ALLOWED_ORIGINS
         value: https://esmnst-frontend.onrender.com,http://localhost:3000
-    rootDir: backend
+    rootDir: backend  # ✅ This tells Render to look inside the backend folder
 
   # Frontend Static Site
   - type: web
