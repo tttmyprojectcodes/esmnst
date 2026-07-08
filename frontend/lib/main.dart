@@ -4083,8 +4083,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ),
-    );
-  }
+        );
+      }
 
   Widget _buildStatCard(String icon, String label, String value) {
     return Container(
