@@ -4083,10 +4083,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ),
-        ),
-      );
+        );
+      }
     }
-  }
 
   Widget _buildStatCard(String icon, String label, String value) {
     return Container(
@@ -4165,7 +4164,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ElevatedButton(
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
-              if (mounted) {
+              if (this.mounted) {
                 Navigator.pushReplacementNamed(context, '/login');
               }
             },
@@ -4312,7 +4311,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
     );
   }
-}
 // =====================================================
 // END OF FILE
 // =====================================================
