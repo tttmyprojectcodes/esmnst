@@ -612,7 +612,7 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        
                         SizedBox(
                           width: double.infinity,
                           height: 50,
@@ -4083,8 +4083,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
               ),
             ),
           ),
-        );
-      }
+        ),
+      );
+    }
 
   Widget _buildStatCard(String icon, String label, String value) {
     return Container(
