@@ -3706,6 +3706,7 @@ class _WalletScreenState extends State<WalletScreen> {
       }
     }
   }
+}
 
 // =====================================================
 // 13. PROFILE SCREEN
