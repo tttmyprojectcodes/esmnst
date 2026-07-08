@@ -4164,7 +4164,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ElevatedButton(
             onPressed: () async {
               await FirebaseAuth.instance.signOut();
-              if (this.mounted) {
+              if (mounted) {
                 Navigator.pushReplacementNamed(context, '/login');
               }
             },
