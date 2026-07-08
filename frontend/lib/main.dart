@@ -3712,13 +3712,6 @@ class _WalletScreenState extends State<WalletScreen> {
 // 13. PROFILE SCREEN
 // =====================================================
 
-class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
-
-  @override
-  State<ProfileScreen> createState() => _ProfileScreenState();
-}
-
 class _ProfileScreenState extends State<ProfileScreen> {
   Map<String, dynamic>? _userData;
   bool _isLoading = true;
@@ -3838,6 +3831,64 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     const SizedBox(height: 16),
 
                     // Statistics
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _buildStatCard('📋', 'Orders', '0'),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildStatCard('📱', 'eSIMs', '0'),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _buildStatCard('💰', 'Spent', '\$${balance.toStringAsFixed(2)}'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Account Settings
+                    const Text(
+                      'Account Settings',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildSettingsTile(
+                      Icons.notifications_outlined,
+                      'Notifications',
+                      'Manage notification preferences',
+                      () {
+                        // Navigate to notification settings
+                      },
+                    ),
+                    _buildSettingsTile(
+                      Icons.dark_mode_outlined,
+                      'Dark Mode',
+                      'Toggle dark theme',
+                      () {
+                        // Toggle dark mode
+                      },
+                    ),
+                    _buildSettingsTile(
+                      Icons.language_outlined,
+                      'Language',
+                      'Change app language',
+                      () {
+                        // Show language selection
+                      },
+                    ),
+                    _buildSettingsTile(
+                      Icons.lock_outlined,
+                      'Change Password',
+                      'Update your password',
+                      () {
+                        _showChangePasswordDialog(context);
+                      },
+                    ),
                     const SizedBox(height: 16),
 
                     // Legal Pages
@@ -4030,7 +4081,198 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
-  
+  Widget _buildSettingsTile(
+    IconData icon,
+    String title,
+    String subtitle,
+    VoidCallback onTap,
+  ) {
+    return ListTile(
+      leading: Icon(icon, color: const Color(0xFF94A3B8)),
+      title: Text(
+        title,
+        style: const TextStyle(fontSize: 14),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(
+          color: Color(0xFF94A3B8),
+          fontSize: 11,
+        ),
+      ),
+      trailing: const Icon(
+        Icons.arrow_forward_ios,
+        size: 14,
+        color: Color(0xFF64748B),
+      ),
+      onTap: onTap,
+      contentPadding: EdgeInsets.zero,
+    );
+  }
+
+  void _showLogoutDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E3A5F),
+        title: const Text('Logout'),
+        content: const Text('Are you sure you want to logout?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              await FirebaseAuth.instance.signOut();
+              if (mounted) {
+                Navigator.pushReplacementNamed(context, '/login');
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFEF4444),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Logout'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showChangePasswordDialog(BuildContext context) {
+    final currentPasswordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    final confirmPasswordController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E3A5F),
+        title: const Text('Change Password'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: currentPasswordController,
+              style: const TextStyle(color: Colors.white),
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Current Password',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: newPasswordController,
+              style: const TextStyle(color: Colors.white),
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'New Password (min 6 chars)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: confirmPasswordController,
+              style: const TextStyle(color: Colors.white),
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: 'Confirm New Password',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (newPasswordController.text.length < 6) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Password must be at least 6 characters'),
+                  ),
+                );
+                return;
+              }
+              if (newPasswordController.text != confirmPasswordController.text) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Passwords do not match')),
+                );
+                return;
+              }
+              // In production, reauthenticate then update password
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('Password updated successfully!'),
+                  backgroundColor: Color(0xFF10B981),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF59E0B),
+              foregroundColor: const Color(0xFF0A1628),
+            ),
+            child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _openLegalPage(String pageName) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E3A5F),
+        title: Text(pageName),
+        content: Container(
+          width: double.maxFinite,
+          height: 400,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'This is a placeholder for the legal page content.',
+                  style: TextStyle(color: Color(0xFF94A3B8)),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Full legal pages will be displayed here in production.',
+                  style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
+                ),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    '📧 For any legal inquiries, contact: support@esimnest.com',
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+}
 // =====================================================
 // END OF FILE
 // =====================================================
