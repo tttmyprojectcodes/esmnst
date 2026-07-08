@@ -21,6 +21,8 @@ import time
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+import razorpay
+from razorpay.errors import SignatureVerificationError
 
 # =====================================================
 # 1. INITIALIZATION
@@ -64,6 +66,9 @@ except Exception as e:
 ESIM_ACCESS_CODE = os.getenv('ESIM_ACCESS_CODE')
 ESIM_API_URL = os.getenv('ESIM_API_URL', 'https://api.esimaccess.com')
 MARKUP_MULTIPLIER = float(os.getenv('MARKUP_MULTIPLIER', '2.0'))
+RAZORPAY_KEY_ID = os.getenv('RAZORPAY_KEY_ID')
+RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET')
+razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
 # =====================================================
 # 4. eSIM ACCESS AUTHENTICATION (UPDATED)
@@ -204,6 +209,112 @@ async def debug():
 # REST OF YOUR CODE BELOW...
 # =====================================================
 
+
+@app.post("/api/payment/razorpay/create-order")
+async def create_razorpay_order(request: dict, user: dict = Depends(get_current_user)):
+    """Create a Razorpay order"""
+    try:
+        uid = user['uid']
+        amount = request.get('amount')
+        
+        if not amount or amount <= 0:
+            raise HTTPException(status_code=400, detail="Invalid amount")
+        
+        # Create order in Razorpay
+        order_data = {
+            'amount': int(amount * 100),  # Convert to paise
+            'currency': 'INR',
+            'receipt': f'receipt_{uid}_{int(time.time())}',
+            'payment_capture': 1
+        }
+        
+        order = razorpay_client.order.create(data=order_data)
+        
+        # Store in Firestore
+        db.collection('razorpay_orders').document(order['id']).set({
+            'userId': uid,
+            'amount': amount,
+            'order_id': order['id'],
+            'status': 'created',
+            'createdAt': firestore.SERVER_TIMESTAMP
+        })
+        
+        return {
+            'success': True,
+            'order_id': order['id'],
+            'amount': amount,
+            'currency': 'INR',
+            'key': RAZORPAY_KEY_ID
+        }
+        
+    except Exception as e:
+        print(f"Razorpay error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/payment/razorpay/verify")
+async def verify_razorpay_payment(request: dict, user: dict = Depends(get_current_user)):
+    """Verify Razorpay payment signature"""
+    try:
+        uid = user['uid']
+        payment_id = request.get('razorpay_payment_id')
+        order_id = request.get('razorpay_order_id')
+        signature = request.get('razorpay_signature')
+        
+        # Verify signature
+        params_dict = {
+            'razorpay_payment_id': payment_id,
+            'razorpay_order_id': order_id,
+            'razorpay_signature': signature
+        }
+        
+        razorpay_client.utility.verify_payment_signature(params_dict)
+        
+        # Get order details
+        order_ref = db.collection('razorpay_orders').document(order_id)
+        order_doc = order_ref.get()
+        
+        if not order_doc.exists:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        order_data = order_doc.to_dict()
+        amount = order_data.get('amount', 0)
+        
+        # Credit wallet
+        user_ref = db.collection('users').document(uid)
+        user_ref.update({
+            'walletBalance': firestore.Increment(amount)
+        })
+        
+        # Log transaction
+        db.collection('transactions').add({
+            'userId': uid,
+            'type': 'credit',
+            'amount': amount,
+            'currency': 'INR',
+            'description': f'Added money via Razorpay (Payment ID: {payment_id})',
+            'reference': payment_id,
+            'status': 'completed',
+            'createdAt': firestore.SERVER_TIMESTAMP
+        })
+        
+        # Update order status
+        order_ref.update({
+            'status': 'completed',
+            'payment_id': payment_id,
+            'verifiedAt': firestore.SERVER_TIMESTAMP
+        })
+        
+        return {
+            'success': True,
+            'message': 'Payment verified successfully',
+            'amount': amount
+        }
+        
+    except SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Signature verification failed")
+    except Exception as e:
+        print(f"Verification error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @app.post("/webhook")
