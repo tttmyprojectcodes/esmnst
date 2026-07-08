@@ -13,6 +13,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 
 // =====================================================
 // 1. BRAND CONSTANTS
@@ -3512,68 +3513,231 @@ class _WalletScreenState extends State<WalletScreen> {
     double amount,
     String method,
   ) async {
-    // In production, integrate with Razorpay/PayPal SDK
-    // For now, simulate payment success
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user == null) return;
 
-      // Simulate payment processing
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => const AlertDialog(
-          backgroundColor: Color(0xFF1E3A5F),
-          title: Text('Processing Payment...'),
-          content: SizedBox(
-            height: 50,
-            child: Center(
-              child: CircularProgressIndicator(),
-            ),
-          ),
-        ),
-      );
-
-      await Future.delayed(const Duration(seconds: 2));
-
-      // Credit wallet
-      final userRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
-      await userRef.update({
-        'walletBalance': FieldValue.increment(amount),
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      // Create transaction
-      await FirebaseFirestore.instance.collection('transactions').add({
-        'userId': user.uid,
-        'type': 'credit',
-        'amount': amount,
-        'currency': 'USD',
-        'description': 'Added money via $method',
-        'reference': 'PAY-${DateTime.now().millisecondsSinceEpoch}',
-        'status': 'completed',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      Navigator.pop(context); // Close loading dialog
-
+      if (method == 'razorpay') {
+        // Get auth token
+        final token = await user.getIdToken();
+      
+        // Create order on backend
+        final response = await http.post(
+          Uri.parse('${ApiService.baseUrl}/payment/razorpay/create-order'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: json.encode({'amount': amount}),
+        );
+      
+        if (response.statusCode != 200) {
+          throw Exception('Failed to create Razorpay order');
+        }
+      
+        final data = json.decode(response.body);
+      
+        // Initialize Razorpay
+        final razorpay = Razorpay();
+      
+        // Payment success handler
+        razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, (paymentResponse) async {
+          try {
+            // Verify payment on backend
+            final verifyResponse = await http.post(
+              Uri.parse('${ApiService.baseUrl}/payment/razorpay/verify'),
+              headers: {
+                'Authorization': 'Bearer $token',
+                'Content-Type': 'application/json',
+              },
+              body: json.encode({
+                'razorpay_payment_id': paymentResponse['razorpay_payment_id'],
+                'razorpay_order_id': paymentResponse['razorpay_order_id'],
+                'razorpay_signature': paymentResponse['razorpay_signature'],
+              }),
+            );
+          
+            if (verifyResponse.statusCode == 200) {
+              final result = json.decode(verifyResponse.body);
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('₹${result['amount'].toStringAsFixed(2)} added to wallet!'),
+                    backgroundColor: const Color(0xFF10B981),
+                  ),
+                );
+                _loadData();
+              }
+            } else {
+              throw Exception('Payment verification failed');
+            }
+          } catch (e) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Verification error: $e')),
+              );
+            }
+          }
+        });
+      
+        // Payment error handler
+        razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, (error) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Payment failed: ${error['description']}')),
+            );
+          }
+        });
+      
+        // Payment external wallet handler
+        razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, (response) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('External wallet selected')),
+            );
+          }
+        });
+      
+        var options = {
+          'key': data['key'],
+          'amount': amount * 100, // Razorpay expects paise
+          'name': 'eSIMNest',
+          'description': 'Add money to wallet',
+          'order_id': data['order_id'],
+          'prefill': {
+            'contact': user.phoneNumber ?? '',
+            'email': user.email ?? '',
+          },
+          'theme': {
+            'color': '#F59E0B',
+          },
+        };
+      
+        razorpay.open(options);
+      
+      } else if (method == 'paypal') {
+        // Get auth token
+        final token = await user.getIdToken();
+      
+        // Create PayPal order
+        final response = await http.post(
+          Uri.parse('${ApiService.baseUrl}/payment/paypal/create-order'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: json.encode({'amount': amount}),
+        );
+      
+        if (response.statusCode != 200) {
+          throw Exception('Failed to create PayPal order');
+        }
+      
+        final data = json.decode(response.body);
+      
+        if (data['success'] == true && data['approval_url'] != null) {
+          // Open PayPal approval URL
+          final url = data['approval_url'];
+          if (await canLaunchUrl(Uri.parse(url))) {
+            await launchUrl(Uri.parse(url));
+          
+            // After PayPal redirect, capture payment
+            // This is simplified - in production, handle the redirect callback
+            showDialog(
+              context: context,
+              barrierDismissible: false,
+              builder: (context) => AlertDialog(
+                backgroundColor: const Color(0xFF1E3A5F),
+                title: const Text('Complete Payment'),
+                content: const Text(
+                  'Please complete the payment in PayPal.\nAfter completion, click "Verify" below.',
+                ),
+                actions: [
+                  ElevatedButton(
+                    onPressed: () async {
+                      Navigator.pop(context);
+                    
+                      // Show loading
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (context) => const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+                    
+                      try {
+                        // Capture payment
+                        final captureResponse = await http.post(
+                          Uri.parse('${ApiService.baseUrl}/payment/paypal/capture'),
+                          headers: {
+                            'Authorization': 'Bearer $token',
+                            'Content-Type': 'application/json',
+                          },
+                          body: json.encode({
+                            'payment_id': data['payment_id'],
+                            'payer_id': 'PAYER_ID_FROM_REDIRECT', // Get from URL
+                          }),
+                        );
+                      
+                        Navigator.pop(context);
+                      
+                        if (captureResponse.statusCode == 200) {
+                          final result = json.decode(captureResponse.body);
+                          if (mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('₹${result['amount'].toStringAsFixed(2)} added to wallet!'),
+                                backgroundColor: const Color(0xFF10B981),
+                              ),
+                            );
+                            _loadData();
+                          }
+                        } else {
+                          throw Exception('Payment capture failed');
+                        }
+                      } catch (e) {
+                        Navigator.pop(context);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('Capture error: $e')),
+                          );
+                        }
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFF59E0B),
+                      foregroundColor: const Color(0xFF0A1628),
+                    ),
+                    child: const Text('Verify Payment'),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                ],
+              ),
+            );
+          } else {
+            throw Exception('Could not launch PayPal');
+          }
+        } else {
+          throw Exception('Failed to create PayPal order');
+        }
+      
+      } else if (method == 'manual') {
+        // Show manual payment dialog
+        _showManualPaymentDialog(context);
+      }
+    
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('₹${amount.toStringAsFixed(2)} added to wallet!'),
-            backgroundColor: const Color(0xFF10B981),
-          ),
+          SnackBar(content: Text('Error: $e')),
         );
-        _loadData();
       }
-    } catch (e) {
-      Navigator.pop(context);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Payment failed: $e')),
-      );
     }
   }
-}
 
 // =====================================================
 // 13. PROFILE SCREEN
