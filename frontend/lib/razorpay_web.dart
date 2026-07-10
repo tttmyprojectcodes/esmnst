@@ -18,8 +18,27 @@ class RazorpayOptions {
     num? amount,
     String? name,
     String? description,
-    Function? handler,
     dynamic prefill,
     dynamic theme,
+    Function? handler,
+    Function? modal,
+  });
+}
+
+@JS()
+@anonymous
+class Prefill {
+  external factory Prefill({
+    String? name,
+    String? email,
+    String? contact,
+  });
+}
+
+@JS()
+@anonymous
+class Theme {
+  external factory Theme({
+    String? color,
   });
 }
