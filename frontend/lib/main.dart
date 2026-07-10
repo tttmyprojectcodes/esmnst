@@ -14,6 +14,9 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:js_util' as js_util;
+import 'dart:html' as html;
 
 // =====================================================
 // 1. BRAND CONSTANTS
