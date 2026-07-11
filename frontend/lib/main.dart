@@ -2969,6 +2969,340 @@ class _WalletScreenState extends State<WalletScreen> {
     }
   }
 
+  void _showAddMoneyDialog({double? prefillAmount, String? paymentMethod}) {
+    final amountController = TextEditingController(
+      text: prefillAmount?.toString() ?? '',
+    );
+    String selectedMethod = paymentMethod ?? 'razorpay';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E3A5F),
+        title: const Text('Add Money'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: amountController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Amount',
+                prefixText: '₹ ',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: selectedMethod,
+              dropdownColor: const Color(0xFF0A1628),
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Payment Method',
+                border: OutlineInputBorder(),
+              ),
+              items: const [
+                DropdownMenuItem(value: 'razorpay', child: Text('Razorpay')),
+                DropdownMenuItem(value: 'paypal', child: Text('PayPal')),
+                DropdownMenuItem(value: 'manual', child: Text('Manual Payment')),
+              ],
+              onChanged: (value) {
+                selectedMethod = value!;
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final amount = double.tryParse(amountController.text);
+              if (amount == null || amount <= 0) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Please enter a valid amount')),
+                );
+                return;
+              }
+              Navigator.pop(context);
+              _processPayment(amount, selectedMethod);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFF59E0B),
+              foregroundColor: const Color(0xFF0A1628),
+            ),
+            child: const Text('Proceed to Pay'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showManualPaymentDialog() {
+    final methodController = TextEditingController();
+    final amountController = TextEditingController();
+    final referenceController = TextEditingController();
+    final notesController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: const Color(0xFF1E3A5F),
+        title: const Text('Manual Payment Request'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: methodController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Method Name',
+                hintText: 'e.g., Bank Transfer, Cash',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: amountController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Amount',
+                prefixText: '₹ ',
+                border: OutlineInputBorder(),
+              ),
+              keyboardType: TextInputType.number,
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: referenceController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Reference Number',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: notesController,
+              style: const TextStyle(color: Colors.white),
+              decoration: const InputDecoration(
+                labelText: 'Notes (Optional)',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 2,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              if (methodController.text.isEmpty ||
+                  amountController.text.isEmpty ||
+                  referenceController.text.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please fill in all required fields'),
+                  ),
+                );
+                return;
+              }
+              Navigator.pop(context);
+              await _submitManualPayment(
+                methodController.text,
+                double.parse(amountController.text),
+                referenceController.text,
+                notesController.text,
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Submit Request'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submitManualPayment(
+    String method,
+    double amount,
+    String reference,
+    String notes,
+  ) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      await FirebaseFirestore.instance.collection('paymentRequests').add({
+        'userId': user.uid,
+        'method_name': method,
+        'amount': amount,
+        'reference_number': reference,
+        'notes': notes,
+        'status': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Payment request submitted! Admin will verify it soon.',
+            ),
+            backgroundColor: Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error submitting request: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _processPayment(double amount, String method) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      if (method == 'razorpay') {
+        // Get auth token
+        final token = await user.getIdToken();
+
+        // Create order on backend
+        final response = await http.post(
+          Uri.parse('${ApiService.baseUrl}/payment/razorpay/create-order'),
+          headers: {
+            'Authorization': 'Bearer $token',
+            'Content-Type': 'application/json',
+          },
+          body: json.encode({'amount': amount}),
+        );
+
+        if (response.statusCode != 200) {
+          throw Exception('Failed to create Razorpay order');
+        }
+
+        final data = json.decode(response.body);
+
+        // Open Razorpay payment
+        RazorpayService.openPayment(
+          amount: amount,
+          currency: 'INR',
+          orderId: data['order_id'],
+          key: data['key'],
+          name: 'eSIMNest',
+          description: 'Add money to wallet',
+          userEmail: user.email ?? '',
+          userPhone: user.phoneNumber ?? '',
+          onSuccess: (paymentResponse) async {
+            try {
+              // Verify payment on backend
+              final verifyResponse = await http.post(
+                Uri.parse('${ApiService.baseUrl}/payment/razorpay/verify'),
+                headers: {
+                  'Authorization': 'Bearer $token',
+                  'Content-Type': 'application/json',
+                },
+                body: json.encode({
+                  'razorpay_payment_id': paymentResponse['razorpay_payment_id'],
+                  'razorpay_order_id': paymentResponse['razorpay_order_id'],
+                  'razorpay_signature': paymentResponse['razorpay_signature'],
+                }),
+              );
+
+              if (verifyResponse.statusCode == 200) {
+                final result = json.decode(verifyResponse.body);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('₹${result['amount'].toStringAsFixed(2)} added to wallet!'),
+                      backgroundColor: const Color(0xFF10B981),
+                    ),
+                  );
+                  _loadData();
+                }
+              } else {
+                throw Exception('Payment verification failed');
+              }
+            } catch (e) {
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Verification error: $e')),
+                );
+              }
+            }
+          },
+          onError: (error) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Payment failed: ${error['error']['description'] ?? 'Unknown error'}'),
+                ),
+              );
+            }
+          },
+          onExternalWallet: (response) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('External wallet selected')),
+              );
+            }
+          },
+        );
+      } else if (method == 'paypal') {
+        await _processPayPalPayment(amount);
+      } else if (method == 'manual') {
+        _showManualPaymentDialog();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _processPayPalPayment(double amount) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      final paypalUrl = 'https://www.paypal.com/checkoutnow?amount=$amount&currency=USD';
+      if (await canLaunchUrl(Uri.parse(paypalUrl))) {
+        await launchUrl(Uri.parse(paypalUrl));
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('PayPal opened in browser. Complete payment there.'),
+            ),
+          );
+        }
+      } else {
+        throw Exception('Could not launch PayPal');
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('PayPal error: $e')),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final balance = _userData?['walletBalance'] ?? 0.0;
@@ -3028,7 +3362,7 @@ class _WalletScreenState extends State<WalletScreen> {
                               Expanded(
                                 child: ElevatedButton(
                                   onPressed: () {
-                                    _showAddMoneyDialog(context);
+                                    _showAddMoneyDialog();
                                   },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: const Color(0xFFF59E0B),
@@ -3154,15 +3488,14 @@ class _WalletScreenState extends State<WalletScreen> {
                 ),
               ),
             ),
-          );
-    }
+    );
   }
 
   Widget _buildQuickAddButton(String label, double amount) {
     return Expanded(
       child: ElevatedButton(
         onPressed: () {
-          _showAddMoneyDialog(context, prefillAmount: amount);
+          _showAddMoneyDialog(prefillAmount: amount);
         },
         style: ElevatedButton.styleFrom(
           backgroundColor: Colors.white.withOpacity(0.05),
@@ -3221,9 +3554,9 @@ class _WalletScreenState extends State<WalletScreen> {
           ElevatedButton(
             onPressed: () {
               if (method == 'razorpay' || method == 'paypal') {
-                _showAddMoneyDialog(context, paymentMethod: method);
+                _showAddMoneyDialog(paymentMethod: method);
               } else {
-                _showManualPaymentDialog(context);
+                _showManualPaymentDialog();
               }
             },
             style: ElevatedButton.styleFrom(
@@ -3307,394 +3640,7 @@ class _WalletScreenState extends State<WalletScreen> {
       ),
     );
   }
-
-  void _showAddMoneyDialog(
-    BuildContext context, {
-    double? prefillAmount,
-    String? paymentMethod,
-  }) {
-    final amountController = TextEditingController(
-      text: prefillAmount?.toString() ?? '',
-    );
-    String selectedMethod = paymentMethod ?? 'razorpay';
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E3A5F),
-        title: const Text('Add Money'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: amountController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Amount',
-                prefixText: '₹ ',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              value: selectedMethod,
-              dropdownColor: const Color(0xFF0A1628),
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Payment Method',
-                border: OutlineInputBorder(),
-              ),
-              items: const [
-                DropdownMenuItem(value: 'razorpay', child: Text('Razorpay')),
-                DropdownMenuItem(value: 'paypal', child: Text('PayPal')),
-                DropdownMenuItem(value: 'manual', child: Text('Manual Payment')),
-              ],
-              onChanged: (value) {
-                selectedMethod = value!;
-              },
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              final amount = double.tryParse(amountController.text);
-              if (amount == null || amount <= 0) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Please enter a valid amount')),
-                );
-                return;
-              }
-              Navigator.pop(context);
-              _processPayment(context, amount, selectedMethod);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF59E0B),
-              foregroundColor: const Color(0xFF0A1628),
-            ),
-            child: const Text('Proceed to Pay'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showManualPaymentDialog(BuildContext context) {
-    final methodController = TextEditingController();
-    final amountController = TextEditingController();
-    final referenceController = TextEditingController();
-    final notesController = TextEditingController();
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: const Color(0xFF1E3A5F),
-        title: const Text('Manual Payment Request'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: methodController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Method Name',
-                hintText: 'e.g., Bank Transfer, Cash',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: amountController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Amount',
-                prefixText: '₹ ',
-                border: OutlineInputBorder(),
-              ),
-              keyboardType: TextInputType.number,
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: referenceController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Reference Number',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: notesController,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                labelText: 'Notes (Optional)',
-                border: OutlineInputBorder(),
-              ),
-              maxLines: 2,
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              if (methodController.text.isEmpty ||
-                  amountController.text.isEmpty ||
-                  referenceController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Please fill in all required fields'),
-                  ),
-                );
-                return;
-              }
-              Navigator.pop(context);
-              await _submitManualPayment(
-                methodController.text,
-                double.parse(amountController.text),
-                referenceController.text,
-                notesController.text,
-              );
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF2563EB),
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Submit Request'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _submitManualPayment(
-    String method,
-    double amount,
-    String reference,
-    String notes,
-  ) async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-
-      await FirebaseFirestore.instance.collection('paymentRequests').add({
-        'userId': user.uid,
-        'method_name': method,
-        'amount': amount,
-        'reference_number': reference,
-        'notes': notes,
-        'status': 'pending',
-        'createdAt': FieldValue.serverTimestamp(),
-      });
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'Payment request submitted! Admin will verify it soon.',
-            ),
-            backgroundColor: Color(0xFF10B981),
-          ),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error submitting request: $e')),
-      );
-    }
-  }
-
-  Future<void> _processPayment(
-    BuildContext context,
-    double amount,
-    String method,
-  ) async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-
-      if (method == 'razorpay') {
-        // Get auth token
-        final token = await user.getIdToken();
-
-        // Show loading
-        showDialog(
-          context: context,
-          barrierDismissible: false,
-          builder: (context) => const Center(
-            child: CircularProgressIndicator(),
-          ),
-        );
-
-        // Create order on backend
-        final response = await http.post(
-          Uri.parse('${ApiService.baseUrl}/payment/razorpay/create-order'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-          body: json.encode({'amount': amount}),
-        );
-
-        Navigator.pop(context); // Close loading
-
-        if (response.statusCode != 200) {
-          throw Exception('Failed to create Razorpay order');
-        }
-
-        final data = json.decode(response.body);
-
-        // Initialize Razorpay service
-        RazorpayService.initialize();
-
-        // Open Razorpay payment
-        await RazorpayService.openPayment(
-          amount: amount,
-          currency: 'INR',
-          orderId: data['order_id'],
-          key: data['key'],
-          name: 'eSIMNest',
-          description: 'Add money to wallet',
-          userEmail: user.email ?? '',
-          userPhone: user.phoneNumber ?? '',
-          onSuccess: (paymentResponse) async {
-            try {
-              // Verify payment on backend
-              final verifyResponse = await http.post(
-                Uri.parse('${ApiService.baseUrl}/payment/razorpay/verify'),
-                headers: {
-                  'Authorization': 'Bearer $token',
-                  'Content-Type': 'application/json',
-                },
-                body: json.encode({
-                  'razorpay_payment_id': paymentResponse['razorpay_payment_id'],
-                  'razorpay_order_id': paymentResponse['razorpay_order_id'],
-                  'razorpay_signature': paymentResponse['razorpay_signature'],
-                }),
-              );
-
-              if (verifyResponse.statusCode == 200) {
-                final result = json.decode(verifyResponse.body);
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text('₹${result['amount'].toStringAsFixed(2)} added to wallet!'),
-                      backgroundColor: const Color(0xFF10B981),
-                    ),
-                  );
-                  _loadData();
-                }
-              } else {
-                throw Exception('Payment verification failed');
-              }
-            } catch (e) {
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Verification error: $e')),
-                );
-              }
-            }
-          },
-          onError: (error) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Payment failed: ${error['error']['description'] ?? 'Unknown error'}'),
-                ),
-              );
-            }
-          },
-          onExternalWallet: (response) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('External wallet selected')),
-              );
-            }
-          },
-        );
-      } else if (method == 'paypal') {
-        // PayPal implementation for all platforms
-        await _processPayPalPayment(context, amount);
-      } else if (method == 'manual') {
-        _showManualPaymentDialog(context);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _processPayPalPayment(BuildContext context, double amount) async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
-
-      // For Web, open PayPal in new window
-      if (kIsWeb) {
-        // Open PayPal checkout URL
-        final paypalUrl = 'https://www.paypal.com/checkoutnow?amount=$amount&currency=USD';
-        await launchUrl(Uri.parse(paypalUrl));
-      
-        // Show completion dialog
-        if (mounted) {
-          showDialog(
-            context: context,
-            barrierDismissible: false,
-            builder: (context) => AlertDialog(
-              backgroundColor: const Color(0xFF1E3A5F),
-              title: const Text('PayPal Payment'),
-              content: const Text(
-                'Please complete the payment in the PayPal window.\nAfter completion, click "Verify" below.',
-              ),
-              actions: [
-                ElevatedButton(
-                  onPressed: () async {
-                    Navigator.pop(context);
-                    // Show manual verification dialog
-                    _showManualPaymentDialog(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF59E0B),
-                    foregroundColor: const Color(0xFF0A1628),
-                  ),
-                  child: const Text('Verify Payment'),
-                ),
-              ],
-            ),
-          );
-        }
-      } else {
-        // Mobile/Desktop - use URL launcher
-        final paypalUrl = 'https://www.paypal.com/checkoutnow?amount=$amount&currency=USD';
-        if (await canLaunchUrl(Uri.parse(paypalUrl))) {
-          await launchUrl(Uri.parse(paypalUrl));
-        
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('PayPal opened in browser. Complete payment there.'),
-              ),
-            );
-          }
-        } else {
-          throw Exception('Could not launch PayPal');
-        }
-      }
-    } catch (e) {
-      throw Exception('PayPal error: $e');
-    }
-  }
+}
 // =====================================================
 // 13. PROFILE SCREEN
 // =====================================================
