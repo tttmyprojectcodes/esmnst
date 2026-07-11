@@ -3154,7 +3154,8 @@ class _WalletScreenState extends State<WalletScreen> {
                 ),
               ),
             ),
-    );
+          ),
+    }
   }
 
   Widget _buildQuickAddButton(String label, double amount) {
