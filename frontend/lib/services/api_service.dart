@@ -4,7 +4,7 @@ import 'dart:convert';
 
 class ApiService {
   // ✅ HARDCODE the correct URL - THIS WILL WORK
-  static const String baseUrl = 'https://esmnst-backend.onrender.com/api';
+  static const String baseUrl = 'https://esmnst.onrender.com/api';
   
   // Get auth token
   static Future<String> _getToken() async {
