@@ -209,6 +209,55 @@ async def debug():
 # REST OF YOUR CODE BELOW...
 # =====================================================
 
+@app.post("/api/payment/paypal/create-order")
+async def create_paypal_order(request: dict, user: dict = Depends(get_current_user)):
+    try:
+        amount = request.get('amount', 0)
+        currency = request.get('currency', 'USD')
+        
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Invalid amount")
+        
+        # PayPal API call (simplified - use actual PayPal SDK in production)
+        # For now, return a mock response
+        return {
+            "success": True,
+            "payment_id": f"PAY-{secrets.token_hex(8)}",
+            "approval_url": f"https://www.paypal.com/checkoutnow?token={secrets.token_hex(16)}"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@app.post("/api/payment/paypal/capture")
+async def capture_paypal_payment(request: dict, user: dict = Depends(get_current_user)):
+    try:
+        payment_id = request.get('payment_id')
+        
+        # In production, call PayPal API to capture payment
+        # For now, simulate successful capture
+        
+        # Credit wallet
+        db.collection('users').document(user['uid']).update({
+            'walletBalance': firestore.Increment(100.0)  # Mock amount
+        })
+        
+        db.collection('transactions').add({
+            'userId': user['uid'],
+            'type': 'credit',
+            'amount': 100.0,
+            'currency': 'USD',
+            'description': f'Added via PayPal (Payment: {payment_id})',
+            'status': 'completed',
+            'createdAt': firestore.SERVER_TIMESTAMP
+        })
+        
+        return {
+            "success": True,
+            "message": "Payment captured successfully",
+            "amount": 100.0
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/payment/razorpay/create-order")
 async def create_razorpay_order(request: dict, user: dict = Depends(get_current_user)):
