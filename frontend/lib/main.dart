@@ -3522,7 +3522,16 @@ class _WalletScreenState extends State<WalletScreen> {
       if (method == 'razorpay') {
         // Get auth token
         final token = await user.getIdToken();
-      
+
+        // Show loading
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(
+            child: CircularProgressIndicator(),
+          ),
+        );
+
         // Create order on backend
         final response = await http.post(
           Uri.parse('${ApiService.baseUrl}/payment/razorpay/create-order'),
@@ -3532,206 +3541,89 @@ class _WalletScreenState extends State<WalletScreen> {
           },
           body: json.encode({'amount': amount}),
         );
-      
+
+        Navigator.pop(context); // Close loading
+
         if (response.statusCode != 200) {
           throw Exception('Failed to create Razorpay order');
         }
-      
+
         final data = json.decode(response.body);
-      
-        // Initialize Razorpay
-        final razorpay = Razorpay();
-      
-        // Payment success handler
-        razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, (paymentResponse) async {
-          try {
-            // Verify payment on backend
-            final verifyResponse = await http.post(
-              Uri.parse('${ApiService.baseUrl}/payment/razorpay/verify'),
-              headers: {
-                'Authorization': 'Bearer $token',
-                'Content-Type': 'application/json',
-              },
-              body: json.encode({
-                'razorpay_payment_id': paymentResponse['razorpay_payment_id'],
-                'razorpay_order_id': paymentResponse['razorpay_order_id'],
-                'razorpay_signature': paymentResponse['razorpay_signature'],
-              }),
-            );
-          
-            if (verifyResponse.statusCode == 200) {
-              final result = json.decode(verifyResponse.body);
+
+        // Initialize Razorpay service
+        RazorpayService.initialize();
+
+        // Open Razorpay payment
+        await RazorpayService.openPayment(
+          amount: amount,
+          currency: 'INR',
+          orderId: data['order_id'],
+          key: data['key'],
+          name: 'eSIMNest',
+          description: 'Add money to wallet',
+          userEmail: user.email ?? '',
+          userPhone: user.phoneNumber ?? '',
+          onSuccess: (paymentResponse) async {
+            try {
+              // Verify payment on backend
+              final verifyResponse = await http.post(
+                Uri.parse('${ApiService.baseUrl}/payment/razorpay/verify'),
+                headers: {
+                  'Authorization': 'Bearer $token',
+                  'Content-Type': 'application/json',
+                },
+                body: json.encode({
+                  'razorpay_payment_id': paymentResponse['razorpay_payment_id'],
+                  'razorpay_order_id': paymentResponse['razorpay_order_id'],
+                  'razorpay_signature': paymentResponse['razorpay_signature'],
+                }),
+              );
+
+              if (verifyResponse.statusCode == 200) {
+                final result = json.decode(verifyResponse.body);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('₹${result['amount'].toStringAsFixed(2)} added to wallet!'),
+                      backgroundColor: const Color(0xFF10B981),
+                    ),
+                  );
+                  _loadData();
+                }
+              } else {
+                throw Exception('Payment verification failed');
+              }
+            } catch (e) {
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('₹${result['amount'].toStringAsFixed(2)} added to wallet!'),
-                    backgroundColor: const Color(0xFF10B981),
-                  ),
+                  SnackBar(content: Text('Verification error: $e')),
                 );
-                _loadData();
               }
-            } else {
-              throw Exception('Payment verification failed');
             }
-          } catch (e) {
+          },
+          onError: (error) {
             if (mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Verification error: $e')),
+                SnackBar(
+                  content: Text('Payment failed: ${error['error']['description'] ?? 'Unknown error'}'),
+                ),
               );
             }
-          }
-        });
-      
-        // Payment error handler
-        razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, (error) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Payment failed: ${error['description']}')),
-            );
-          }
-        });
-      
-        // Payment external wallet handler
-        razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, (response) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('External wallet selected')),
-            );
-          }
-        });
-      
-        var options = {
-          'key': data['key'],
-          'amount': amount * 100, // Razorpay expects paise
-          'name': 'eSIMNest',
-          'description': 'Add money to wallet',
-          'order_id': data['order_id'],
-          'prefill': {
-            'contact': user.phoneNumber ?? '',
-            'email': user.email ?? '',
           },
-          'theme': {
-            'color': '#F59E0B',
+          onExternalWallet: (response) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('External wallet selected')),
+              );
+            }
           },
-        };
-      
-        razorpay.open(options);
-      
-      } else if (method == 'paypal') {
-        // Get auth token
-        final token = await user.getIdToken();
-      
-        // Create PayPal order
-        final response = await http.post(
-          Uri.parse('${ApiService.baseUrl}/payment/paypal/create-order'),
-          headers: {
-            'Authorization': 'Bearer $token',
-            'Content-Type': 'application/json',
-          },
-          body: json.encode({'amount': amount}),
         );
-      
-        if (response.statusCode != 200) {
-          throw Exception('Failed to create PayPal order');
-        }
-      
-        final data = json.decode(response.body);
-      
-        if (data['success'] == true && data['approval_url'] != null) {
-          // Open PayPal approval URL
-          final url = data['approval_url'];
-          if (await canLaunchUrl(Uri.parse(url))) {
-            await launchUrl(Uri.parse(url));
-          
-            // After PayPal redirect, capture payment
-            // This is simplified - in production, handle the redirect callback
-            showDialog(
-              context: context,
-              barrierDismissible: false,
-              builder: (context) => AlertDialog(
-                backgroundColor: const Color(0xFF1E3A5F),
-                title: const Text('Complete Payment'),
-                content: const Text(
-                  'Please complete the payment in PayPal.\nAfter completion, click "Verify" below.',
-                ),
-                actions: [
-                  ElevatedButton(
-                    onPressed: () async {
-                      Navigator.pop(context);
-                    
-                      // Show loading
-                      showDialog(
-                        context: context,
-                        barrierDismissible: false,
-                        builder: (context) => const Center(
-                          child: CircularProgressIndicator(),
-                        ),
-                      );
-                    
-                      try {
-                        // Capture payment
-                        final captureResponse = await http.post(
-                          Uri.parse('${ApiService.baseUrl}/payment/paypal/capture'),
-                          headers: {
-                            'Authorization': 'Bearer $token',
-                            'Content-Type': 'application/json',
-                          },
-                          body: json.encode({
-                            'payment_id': data['payment_id'],
-                            'payer_id': 'PAYER_ID_FROM_REDIRECT', // Get from URL
-                          }),
-                        );
-                      
-                        Navigator.pop(context);
-                      
-                        if (captureResponse.statusCode == 200) {
-                          final result = json.decode(captureResponse.body);
-                          if (mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('₹${result['amount'].toStringAsFixed(2)} added to wallet!'),
-                                backgroundColor: const Color(0xFF10B981),
-                              ),
-                            );
-                            _loadData();
-                          }
-                        } else {
-                          throw Exception('Payment capture failed');
-                        }
-                      } catch (e) {
-                        Navigator.pop(context);
-                        if (mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Capture error: $e')),
-                          );
-                        }
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFF59E0B),
-                      foregroundColor: const Color(0xFF0A1628),
-                    ),
-                    child: const Text('Verify Payment'),
-                  ),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                ],
-              ),
-            );
-          } else {
-            throw Exception('Could not launch PayPal');
-          }
-        } else {
-          throw Exception('Failed to create PayPal order');
-        }
-      
+      } else if (method == 'paypal') {
+        // PayPal implementation for all platforms
+        await _processPayPalPayment(context, amount);
       } else if (method == 'manual') {
-        // Show manual payment dialog
         _showManualPaymentDialog(context);
       }
-    
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -3740,7 +3632,67 @@ class _WalletScreenState extends State<WalletScreen> {
       }
     }
   }
-}
+
+  Future<void> _processPayPalPayment(BuildContext context, double amount) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      // For Web, open PayPal in new window
+      if (kIsWeb) {
+        // Open PayPal checkout URL
+        final paypalUrl = 'https://www.paypal.com/checkoutnow?amount=$amount&currency=USD';
+        await launchUrl(Uri.parse(paypalUrl));
+      
+        // Show completion dialog
+        if (mounted) {
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              backgroundColor: const Color(0xFF1E3A5F),
+              title: const Text('PayPal Payment'),
+              content: const Text(
+                'Please complete the payment in the PayPal window.\nAfter completion, click "Verify" below.',
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    // Show manual verification dialog
+                    _showManualPaymentDialog(context);
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF59E0B),
+                    foregroundColor: const Color(0xFF0A1628),
+                  ),
+                  child: const Text('Verify Payment'),
+                ),
+              ],
+            ),
+          );
+        }
+      } else {
+        // Mobile/Desktop - use URL launcher
+        final paypalUrl = 'https://www.paypal.com/checkoutnow?amount=$amount&currency=USD';
+        if (await canLaunchUrl(Uri.parse(paypalUrl))) {
+          await launchUrl(Uri.parse(paypalUrl));
+        
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('PayPal opened in browser. Complete payment there.'),
+              ),
+            );
+          }
+        } else {
+          throw Exception('Could not launch PayPal');
+        }
+      }
+    } catch (e) {
+      throw Exception('PayPal error: $e');
+    }
+  }
 // =====================================================
 // 13. PROFILE SCREEN
 // =====================================================
