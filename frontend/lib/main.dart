@@ -3275,33 +3275,134 @@ class _WalletScreenState extends State<WalletScreen> {
     }
   }
 
-  Future<void> _processPayPalPayment(double amount) async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user == null) return;
+    Future<void> _processPayPalPayment(double amount) async {
+  try {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
 
-      final paypalUrl = 'https://www.paypal.com/checkoutnow?amount=$amount&currency=USD';
-      if (await canLaunchUrl(Uri.parse(paypalUrl))) {
-        await launchUrl(Uri.parse(paypalUrl));
+    // Get auth token
+    final token = await user.getIdToken();
+
+    // Create PayPal order on backend
+    final response = await http.post(
+      Uri.parse('${ApiService.baseUrl}/payment/paypal/create-order'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: json.encode({
+        'amount': amount,
+        'currency': 'USD',
+      }),
+    );
+
+    if (response.statusCode != 200) {
+      throw Exception('Failed to create PayPal order');
+    }
+
+    final data = json.decode(response.body);
+    
+    if (data['success'] == true && data['approval_url'] != null) {
+      // Open PayPal in new tab/window
+      final url = data['approval_url'];
+      if (await canLaunchUrl(Uri.parse(url))) {
+        await launchUrl(
+          Uri.parse(url),
+          mode: LaunchMode.externalApplication,
+        );
         
+        // Show completion dialog
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('PayPal opened in browser. Complete payment there.'),
+          showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (context) => AlertDialog(
+              backgroundColor: const Color(0xFF1E3A5F),
+              title: const Text('PayPal Payment'),
+              content: const Text(
+                'Please complete the payment in the PayPal window.\n'
+                'After completion, click "Verify" below.',
+              ),
+              actions: [
+                ElevatedButton(
+                  onPressed: () async {
+                    Navigator.pop(context);
+                    
+                    // Show loading
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (context) => const Center(
+                        child: CircularProgressIndicator(),
+                      ),
+                    );
+                    
+                    try {
+                      // Capture payment
+                      final captureResponse = await http.post(
+                        Uri.parse('${ApiService.baseUrl}/payment/paypal/capture'),
+                        headers: {
+                          'Authorization': 'Bearer $token',
+                          'Content-Type': 'application/json',
+                        },
+                        body: json.encode({
+                          'payment_id': data['payment_id'],
+                        }),
+                      );
+                      
+                      Navigator.pop(context); // Close loading
+                      
+                      if (captureResponse.statusCode == 200) {
+                        final result = json.decode(captureResponse.body);
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('₹${result['amount'].toStringAsFixed(2)} added to wallet!'),
+                              backgroundColor: const Color(0xFF10B981),
+                            ),
+                          );
+                          _loadData();
+                        }
+                      } else {
+                        throw Exception('Payment capture failed');
+                      }
+                    } catch (e) {
+                      Navigator.pop(context); // Close loading
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Capture error: $e')),
+                        );
+                      }
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFFF59E0B),
+                    foregroundColor: const Color(0xFF0A1628),
+                  ),
+                  child: const Text('Verify Payment'),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+              ],
             ),
           );
         }
       } else {
         throw Exception('Could not launch PayPal');
       }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('PayPal error: $e')),
-        );
-      }
+    } else {
+      throw Exception('Failed to create PayPal order');
+    }
+  } catch (e) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('PayPal error: $e')),
+      );
     }
   }
+}
 
   @override
   Widget build(BuildContext context) {
