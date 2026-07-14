@@ -1971,7 +1971,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
 
     try {
-      // ✅ FIX: Use countryCode (e.g., "US", "FR") not countryName
+      // ✅ Use countryCode (e.g., "US", "FR") not countryName
       final plans = await ApiService.getPlans(country: countryCode);
     
       // Close loading
@@ -1991,7 +1991,6 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
-      // Show plans bottom sheet
       showModalBottomSheet(
         context: context,
         isScrollControlled: true,
@@ -2047,7 +2046,8 @@ class _HomeScreenState extends State<HomeScreen> {
                   itemCount: plans.length,
                   itemBuilder: (context, index) {
                     final plan = plans[index];
-                    return _buildPlanCard(
+                    // ✅ FIX: Use _buildPlanCardReal (not _buildPlanCard)
+                    return _buildPlanCardReal(
                       plan['name'] ?? 'Plan',
                       '${plan['data'] ?? 0}GB',
                       '${plan['validity'] ?? 0} Days',
@@ -2063,8 +2063,12 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     } catch (e) {
+      // Close loading on error
       if (mounted) {
         Navigator.pop(context);
+      }
+    
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error loading plans: $e'),
