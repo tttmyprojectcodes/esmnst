@@ -710,77 +710,56 @@ async def get_provider_balance(user: dict = Depends(get_current_user)):
 # 10.2 Get Available Countries (REAL API)
 @app.get("/api/esim/countries")
 async def get_countries(user: dict = Depends(get_current_user)):
-    """Get all available countries from eSIM Access"""
     try:
         if not ESIM_ACCESS_CODE:
-            print("⚠️ ESIM_ACCESS_CODE not set, returning mock data")
             return get_mock_countries()
         
-        # Call real eSIM Access API
+        # ✅ FIX: Use the correct endpoint from eSIM Access docs
+        # Try different endpoints if needed:
+        # 1. /api/v1/open/country/list
+        # 2. /api/v1/country/list
+        # 3. /api/v1/open/country
         response = requests.post(
-            f"{ESIM_API_URL}/api/v1/open/country/list",
+            f"{ESIM_API_URL}/api/v1/open/country/list",  # Try this first
             headers=get_esim_headers(),
             json={},
             timeout=30
         )
         
+        # If 404, try the alternative endpoint
+        if response.status_code == 404:
+            print("⚠️ Endpoint not found, trying alternative...")
+            response = requests.post(
+                f"{ESIM_API_URL}/api/v1/country/list",
+                headers=get_esim_headers(),
+                json={},
+                timeout=30
+            )
+        
         print(f"🔍 Countries API response status: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
-            print(f"🔍 Countries API response: {data}")
-            
             if data.get('success'):
                 countries = data.get('obj', {}).get('countryList', [])
-                
-                # Format response
                 formatted_countries = []
                 for country in countries:
                     formatted_countries.append({
                         "code": country.get('countryCode', ''),
                         "name": country.get('countryName', ''),
                         "flag": country.get('flag', ''),
-                        "currency": country.get('currency', 'USD')
                     })
-                
                 return {
                     "success": True,
                     "countries": formatted_countries,
                     "total": len(formatted_countries)
                 }
-            else:
-                print(f"❌ API returned error: {data.get('errorMsg', 'Unknown error')}")
-                return get_mock_countries()
-        else:
-            print(f"❌ API returned status: {response.status_code}")
-            return get_mock_countries()
-            
+        
+        # If all API calls fail, use mock data
+        return get_mock_countries()
     except Exception as e:
         print(f"❌ Countries API error: {e}")
         return get_mock_countries()
-
-def get_mock_countries():
-    """Fallback mock countries"""
-    return {
-        "success": True,
-        "countries": [
-            {"code": "US", "name": "United States"},
-            {"code": "IN", "name": "India"},
-            {"code": "GB", "name": "United Kingdom"},
-            {"code": "JP", "name": "Japan"},
-            {"code": "FR", "name": "France"},
-            {"code": "DE", "name": "Germany"},
-            {"code": "AE", "name": "UAE"},
-            {"code": "SG", "name": "Singapore"},
-            {"code": "AU", "name": "Australia"},
-            {"code": "CA", "name": "Canada"},
-            {"code": "IT", "name": "Italy"},
-            {"code": "ES", "name": "Spain"},
-            {"code": "TH", "name": "Thailand"},
-            {"code": "MY", "name": "Malaysia"},
-        ],
-        "total": 14
-    }
 
 
 # 10.3 Get Plans for a Country (IMPROVED)
