@@ -273,7 +273,7 @@ async def create_razorpay_order(request: dict, user: dict = Depends(get_current_
         order_data = {
             'amount': int(amount * 100),  # Convert to paise
             'currency': 'INR',
-            'receipt': f'receipt_{uid}_{int(time.time())}',
+            'receipt': f'{user["uid"][:20]}_{int(time.time())}'[:40],
             'payment_capture': 1
         }
         
