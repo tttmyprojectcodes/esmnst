@@ -3,10 +3,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class ApiService {
-  // ✅ HARDCODE the correct URL - THIS WILL WORK
   static const String baseUrl = 'https://esmnst.onrender.com/api';
   
-  // Get auth token
   static Future<String> _getToken() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('User not authenticated');
@@ -15,7 +13,6 @@ class ApiService {
     return token;
   }
 
-  // Get headers with auth token
   static Future<Map<String, String>> _getHeaders() async {
     final token = await _getToken();
     return {
@@ -49,7 +46,7 @@ class ApiService {
     }
   }
 
-  // Get plans for a country
+  // Get plans for a country - ✅ FIX: Uses country code
   static Future<List<Map<String, dynamic>>> getPlans({String? country}) async {
     try {
       final headers = await _getHeaders();
@@ -58,10 +55,15 @@ class ApiService {
         url += '?country=$country';
       }
       
+      print('📡 Fetching plans from: $url');
+      
       final response = await http.get(
         Uri.parse(url),
         headers: headers,
       );
+      
+      print('📡 Plans response status: ${response.statusCode}');
+      print('📡 Plans response body: ${response.body}');
       
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -71,7 +73,7 @@ class ApiService {
       }
       return [];
     } catch (e) {
-      print('Error fetching plans: $e');
+      print('❌ Error fetching plans: $e');
       return [];
     }
   }
@@ -95,26 +97,8 @@ class ApiService {
         return {'success': false, 'error': 'Purchase failed'};
       }
     } catch (e) {
-      print('Error purchasing plan: $e');
+      print('❌ Error purchasing plan: $e');
       return {'success': false, 'error': e.toString()};
-    }
-  }
-
-  // Get provider balance (admin only)
-  static Future<Map<String, dynamic>> getProviderBalance() async {
-    try {
-      final headers = await _getHeaders();
-      final response = await http.get(
-        Uri.parse('$baseUrl/esim/provider-balance'),
-        headers: headers,
-      );
-      
-      if (response.statusCode == 200) {
-        return json.decode(response.body);
-      }
-      return {'success': false};
-    } catch (e) {
-      return {'success': false};
     }
   }
 }
