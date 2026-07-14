@@ -18,6 +18,7 @@ import 'package:flutter/foundation.dart';
 import 'dart:js_util' as js_util;
 import 'dart:html' as html;
 import 'services/razorpay_service.dart';
+import 'data/legal_content.dart';
 
 // =====================================================
 // 1. BRAND CONSTANTS
@@ -4267,53 +4268,84 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 
   void _openLegalPage(String pageName) {
+    String content = '';
+    String title = '';
+
+    switch (pageName) {
+      case 'About Us':
+        title = 'About eSIMNest';
+        content = LegalContent.aboutUs;
+        break;
+      case 'Privacy Policy':
+        title = 'Privacy Policy';
+        content = LegalContent.privacyPolicy;
+        break;
+      case 'Terms of Service':
+        title = 'Terms of Service';
+        content = LegalContent.termsOfService;
+        break;
+      case 'Refund Policy':
+        title = 'Refund Policy';
+        content = LegalContent.refundPolicy;
+        break;
+      case 'Cookie Policy':
+        title = 'Cookie Policy';
+        content = LegalContent.cookiePolicy;
+        break;
+      case 'EULA':
+        title = 'End User License Agreement';
+        content = LegalContent.eula;
+        break;
+      case 'Disclaimer':
+        title = 'Disclaimer';
+        content = LegalContent.disclaimer;
+        break;
+      case 'Delivery Policy':
+        title = 'Delivery Policy';
+        content = LegalContent.deliveryPolicy;
+        break;
+      case 'FAQ':
+        title = 'Frequently Asked Questions';
+        content = LegalContent.faq;
+        break;
+      case 'Contact Us':
+        title = 'Contact Us';
+        content = LegalContent.contactUs;
+        break;
+      default:
+        title = pageName;
+        content = 'Content coming soon...';
+    }
+
     showDialog(
       context: context,
+      barrierDismissible: true,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E3A5F),
-        title: Text(pageName),
+        title: Text(title, style: const TextStyle(color: Color(0xFFF59E0B))),
         content: Container(
           width: double.maxFinite,
           height: 400,
           child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'This is a placeholder for the legal page content.',
-                  style: TextStyle(color: Color(0xFF94A3B8)),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Full legal pages will be displayed here in production.',
-                  style: TextStyle(color: Color(0xFF64748B), fontSize: 12),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: const Text(
-                    '📧 For any legal inquiries, contact: support@esimnest.com',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-                  ),
-                ),
-              ],
+            child: Text(
+              content,
+              style: const TextStyle(
+                color: Color(0xFFE2E8F0),
+                fontSize: 14,
+                height: 1.6,
+              ),
             ),
           ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
+            child: const Text('Close', style: TextStyle(color: Color(0xFFF59E0B))),
           ),
         ],
       ),
     );
   }
-}
 // =====================================================
 // END OF FILE
 // =====================================================
