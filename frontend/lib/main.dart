@@ -1921,19 +1921,46 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-  Widget _buildCountryTile(String flag, String name) {
+  Widget _buildCountryTile(String code, String name) {
     return ListTile(
-      leading: Text(flag, style: const TextStyle(fontSize: 28)),
-      title: Text(name),
-      trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+      leading: Container(
+        width: 40,
+        height: 40,
+        decoration: BoxDecoration(
+          color: const Color(0xFF2563EB).withOpacity(0.2),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Center(
+          child: Text(
+            code.toUpperCase(),
+            style: const TextStyle(
+              color: Color(0xFFF59E0B),
+              fontWeight: FontWeight.bold,
+              fontSize: 12,
+            ),
+          ),
+        ),
+      ),
+      title: Text(
+        name,
+        style: const TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+        ),
+      ),
+      trailing: const Icon(
+        Icons.arrow_forward_ios,
+        size: 14,
+        color: Color(0xFF64748B),
+      ),
       onTap: () {
         Navigator.pop(context);
-        _showPlanSelection(context, name);
+        _showPlanSelection(context, name, code);
       },
     );
   }
 
-  void _showPlanSelection(BuildContext context, String country) async {
+  void _showPlanSelection(BuildContext context, String countryName, String countryCode) async {
     // Show loading
     showDialog(
       context: context,
@@ -1943,88 +1970,112 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
 
-    // Fetch plans from API
-    final plans = await ApiService.getPlans(country: country);
-  
-    Navigator.pop(context); // Close loading dialog
+    try {
+      // Fetch plans from API using country code
+      final plans = await ApiService.getPlans(country: countryCode);
+    
+      // Close loading
+      if (mounted) {
+        Navigator.pop(context);
+      }
 
-    if (plans.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No plans available for this country')),
-      );
-      return;
-    }
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: const BoxDecoration(
-          color: Color(0xFF0A1628),
-          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  '$country Plans',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
+      if (plans.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No plans available for this country'),
+              backgroundColor: Color(0xFFEF4444),
             ),
-            const SizedBox(height: 16),
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
+          );
+        }
+        return;
+      }
+
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (context) => Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF0A1628),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Icon(Icons.info_outline, color: Color(0xFF94A3B8)),
-                  const SizedBox(width: 8),
-                  const Text(
-                    'All plans include instant delivery',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                  Text(
+                    '$countryName Plans',
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: ListView.builder(
-                shrinkWrap: true,
-                itemCount: plans.length,
-                itemBuilder: (context, index) {
-                  final plan = plans[index];
-                  return _buildPlanCardReal(
-                    plan['name'] ?? 'Plan',
-                    '${plan['data'] ?? 0}GB',
-                    '${plan['validity'] ?? 0} Days',
-                    '\$${plan['price']?.toStringAsFixed(2) ?? '0.00'}',
-                    country,
-                    plan['id'] ?? '',
-                  );
-                },
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline, color: Color(0xFF94A3B8)),
+                    const SizedBox(width: 8),
+                    const Text(
+                      'All plans include instant delivery',
+                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                    ),
+                  ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 16),
+              Expanded(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: plans.length,
+                  itemBuilder: (context, index) {
+                    final plan = plans[index];
+                    return _buildPlanCardReal(
+                      plan['name'] ?? 'Plan',
+                      '${plan['data'] ?? 0}GB',
+                      '${plan['validity'] ?? 0} Days',
+                      '\$${plan['price']?.toStringAsFixed(2) ?? '0.00'}',
+                      countryName,
+                      plan['id'] ?? '',
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
-    );
+      );
+    } catch (e) {
+      // Close loading on error
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error loading plans: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    }
   }
   Widget _buildPlanCardReal(String name, String data, String validity, String price, String country, String planId) {
     return Container(
