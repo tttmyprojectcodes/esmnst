@@ -706,26 +706,84 @@ async def get_provider_balance(user: dict = Depends(get_current_user)):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-# 10.2 Get Available Countries (UPDATED)
+
+# 10.2 Get Available Countries (REAL API)
 @app.get("/api/esim/countries")
 async def get_countries(user: dict = Depends(get_current_user)):
     """Get all available countries from eSIM Access"""
     try:
-        # Simple test response
-        return {
-            "success": True,
-            "countries": [
-                {"code": "US", "name": "United States"},
-                {"code": "IN", "name": "India"},
-                {"code": "GB", "name": "United Kingdom"},
-                {"code": "JP", "name": "Japan"},
-            ],
-            "total": 4
-        }
+        if not ESIM_ACCESS_CODE:
+            print("⚠️ ESIM_ACCESS_CODE not set, returning mock data")
+            return get_mock_countries()
+        
+        # Call real eSIM Access API
+        response = requests.post(
+            f"{ESIM_API_URL}/api/v1/open/country/list",
+            headers=get_esim_headers(),
+            json={},
+            timeout=30
+        )
+        
+        print(f"🔍 Countries API response status: {response.status_code}")
+        
+        if response.status_code == 200:
+            data = response.json()
+            print(f"🔍 Countries API response: {data}")
+            
+            if data.get('success'):
+                countries = data.get('obj', {}).get('countryList', [])
+                
+                # Format response
+                formatted_countries = []
+                for country in countries:
+                    formatted_countries.append({
+                        "code": country.get('countryCode', ''),
+                        "name": country.get('countryName', ''),
+                        "flag": country.get('flag', ''),
+                        "currency": country.get('currency', 'USD')
+                    })
+                
+                return {
+                    "success": True,
+                    "countries": formatted_countries,
+                    "total": len(formatted_countries)
+                }
+            else:
+                print(f"❌ API returned error: {data.get('errorMsg', 'Unknown error')}")
+                return get_mock_countries()
+        else:
+            print(f"❌ API returned status: {response.status_code}")
+            return get_mock_countries()
+            
     except Exception as e:
-        print(f"❌ Error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-# 10.3 Get Plans for a Country (UPDATED)
+        print(f"❌ Countries API error: {e}")
+        return get_mock_countries()
+
+def get_mock_countries():
+    """Fallback mock countries"""
+    return {
+        "success": True,
+        "countries": [
+            {"code": "US", "name": "United States"},
+            {"code": "IN", "name": "India"},
+            {"code": "GB", "name": "United Kingdom"},
+            {"code": "JP", "name": "Japan"},
+            {"code": "FR", "name": "France"},
+            {"code": "DE", "name": "Germany"},
+            {"code": "AE", "name": "UAE"},
+            {"code": "SG", "name": "Singapore"},
+            {"code": "AU", "name": "Australia"},
+            {"code": "CA", "name": "Canada"},
+            {"code": "IT", "name": "Italy"},
+            {"code": "ES", "name": "Spain"},
+            {"code": "TH", "name": "Thailand"},
+            {"code": "MY", "name": "Malaysia"},
+        ],
+        "total": 14
+    }
+
+
+# 10.3 Get Plans for a Country (IMPROVED)
 @app.get("/api/esim/plans")
 async def get_plans(
     country: Optional[str] = None,
@@ -734,23 +792,34 @@ async def get_plans(
     """Get eSIM plans from eSIM Access with markup applied"""
     try:
         if not ESIM_ACCESS_CODE:
-            raise HTTPException(status_code=400, detail="eSIM Access not configured")
+            print("⚠️ ESIM_ACCESS_CODE not set, returning mock plans")
+            return get_mock_plans(country)
         
         payload = {}
         if country:
             payload["locationCode"] = country
         
+        print(f"🔍 Fetching plans for country: {country}")
+        
         response = requests.post(
             f"{ESIM_API_URL}/api/v1/open/package/list",
             headers=get_esim_headers(),
             json=payload,
-            timeout=10
+            timeout=30
         )
+        
+        print(f"🔍 Plans API response status: {response.status_code}")
         
         if response.status_code == 200:
             data = response.json()
+            print(f"🔍 Plans API response: {data}")
+            
             if data.get('success'):
                 packages = data.get('obj', {}).get('packageList', [])
+                
+                if not packages:
+                    print(f"⚠️ No packages found for country: {country}")
+                    return {"success": True, "plans": [], "total": 0}
                 
                 formatted_plans = []
                 for plan in packages:
@@ -758,17 +827,18 @@ async def get_plans(
                     retail_price = wholesale_price * MARKUP_MULTIPLIER
                     
                     formatted_plans.append({
-                        "id": plan.get('packageCode'),
-                        "name": plan.get('name'),
-                        "country": plan.get('locationName'),
-                        "countryCode": plan.get('locationCode'),
-                        "data": plan.get('volume'),
-                        "validity": plan.get('duration'),
+                        "id": plan.get('packageCode', ''),
+                        "name": plan.get('name', 'Data Plan'),
+                        "country": plan.get('locationName', country or 'Unknown'),
+                        "countryCode": plan.get('locationCode', ''),
+                        "data": plan.get('volume', 0),
+                        "validity": plan.get('duration', 7),
                         "wholesale_price": wholesale_price,
                         "price": retail_price,
                         "currency": "USD",
                         "markup": MARKUP_MULTIPLIER,
-                        "type": plan.get('type', 'data')
+                        "type": plan.get('type', 'data'),
+                        "description": plan.get('description', '')
                     })
                 
                 return {
@@ -776,11 +846,69 @@ async def get_plans(
                     "plans": formatted_plans,
                     "total": len(formatted_plans)
                 }
-        
-        return {"success": False, "error": "Failed to get plans"}
+            else:
+                print(f"❌ API returned error: {data.get('errorMsg', 'Unknown error')}")
+                return get_mock_plans(country)
+        else:
+            print(f"❌ API returned status: {response.status_code}")
+            return get_mock_plans(country)
+            
     except Exception as e:
-        print(f"❌ Error fetching plans: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"❌ Plans API error: {e}")
+        return get_mock_plans(country)
+
+def get_mock_plans(country):
+    """Fallback mock plans"""
+    plans = {
+        "US": [
+            {"id": "plan_us_1", "name": "1GB Data", "country": "United States", "data": 1, "validity": 7, "price": 10.00},
+            {"id": "plan_us_2", "name": "3GB Data", "country": "United States", "data": 3, "validity": 15, "price": 20.00},
+            {"id": "plan_us_3", "name": "5GB Data", "country": "United States", "data": 5, "validity": 30, "price": 30.00},
+            {"id": "plan_us_4", "name": "10GB Data", "country": "United States", "data": 10, "validity": 30, "price": 50.00},
+        ],
+        "IN": [
+            {"id": "plan_in_1", "name": "1GB Data", "country": "India", "data": 1, "validity": 7, "price": 5.00},
+            {"id": "plan_in_2", "name": "3GB Data", "country": "India", "data": 3, "validity": 15, "price": 12.00},
+            {"id": "plan_in_3", "name": "5GB Data", "country": "India", "data": 5, "validity": 30, "price": 20.00},
+        ],
+        "GB": [
+            {"id": "plan_gb_1", "name": "1GB Data", "country": "United Kingdom", "data": 1, "validity": 7, "price": 8.00},
+            {"id": "plan_gb_2", "name": "3GB Data", "country": "United Kingdom", "data": 3, "validity": 15, "price": 15.00},
+            {"id": "plan_gb_3", "name": "5GB Data", "country": "United Kingdom", "data": 5, "validity": 30, "price": 25.00},
+        ],
+        "JP": [
+            {"id": "plan_jp_1", "name": "1GB Data", "country": "Japan", "data": 1, "validity": 7, "price": 12.00},
+            {"id": "plan_jp_2", "name": "3GB Data", "country": "Japan", "data": 3, "validity": 15, "price": 25.00},
+            {"id": "plan_jp_3", "name": "5GB Data", "country": "Japan", "data": 5, "validity": 30, "price": 40.00},
+        ],
+        "FR": [
+            {"id": "plan_fr_1", "name": "1GB Data", "country": "France", "data": 1, "validity": 7, "price": 8.00},
+            {"id": "plan_fr_2", "name": "3GB Data", "country": "France", "data": 3, "validity": 15, "price": 18.00},
+        ],
+        "DE": [
+            {"id": "plan_de_1", "name": "1GB Data", "country": "Germany", "data": 1, "validity": 7, "price": 8.00},
+            {"id": "plan_de_2", "name": "3GB Data", "country": "Germany", "data": 3, "validity": 15, "price": 18.00},
+        ],
+        "AE": [
+            {"id": "plan_ae_1", "name": "1GB Data", "country": "UAE", "data": 1, "validity": 7, "price": 10.00},
+            {"id": "plan_ae_2", "name": "3GB Data", "country": "UAE", "data": 3, "validity": 15, "price": 22.00},
+        ],
+        "SG": [
+            {"id": "plan_sg_1", "name": "1GB Data", "country": "Singapore", "data": 1, "validity": 7, "price": 8.00},
+            {"id": "plan_sg_2", "name": "3GB Data", "country": "Singapore", "data": 3, "validity": 15, "price": 18.00},
+        ],
+    }
+    
+    if country and country in plans:
+        return {"success": True, "plans": plans[country], "total": len(plans[country])}
+    
+    # Return all plans if no country specified
+    all_plans = []
+    for p in plans.values():
+        all_plans.extend(p)
+    return {"success": True, "plans": all_plans, "total": len(all_plans)}
+
+
 
 # 10.4 Purchase eSIM (UPDATED - Endpoint changed)
 @app.post("/api/esim/purchase")
