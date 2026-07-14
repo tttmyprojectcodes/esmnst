@@ -37,7 +37,11 @@ app = FastAPI(
 # CORS - Allow your Flutter app to connect
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Update with your domain in production
+    allow_origins=[
+        "https://esmnst-frontend.onrender.com",  # Your frontend's exact URL
+        "https://esmnst.onrender.com",           # Your backend URL for testing
+        "http://localhost:3000",                 # For local development
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
