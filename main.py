@@ -822,12 +822,9 @@ async def get_plans(
                 
                 formatted_plans = []
                 for plan in packages:
-                    wholesale_price_cents = plan.get('price', 0)
-                    print(f"🔍 wholesale_price_cents: {wholesale_price_cents}")  # Should print 70
-                    wholesale_price = wholesale_price_cents / 100
-                    print(f"🔍 wholesale_price: {wholesale_price}")  # Should print 0.70
+                    wholesale_price = plan.get('price', 0)
                     retail_price = wholesale_price * MARKUP_MULTIPLIER
-                    print(f"🔍 retail_price: {retail_price}")  # Should print 1.47
+                    retail_price = round(retail_price, 2)
                     
                     formatted_plans.append({
                         "id": plan.get('packageCode', ''),
