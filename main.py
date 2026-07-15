@@ -720,19 +720,29 @@ async def get_countries(user: dict = Depends(get_current_user)):
             print("⚠️ ESIM_ACCESS_CODE not set, returning mock data")
             return get_mock_countries()
         
-        # Try to call the eSIM Access API
-        print(f"🔍 Calling eSIM API at: {ESIM_API_URL}/api/v1/open/country/list")
+        # Try multiple endpoints
+        endpoints = [
+            "/api/v1/open/country/list",
+            "/api/v1/country/list",
+            "/api/v1/open/countries",
+            "/api/v1/countries",
+            "/api/v1/country",
+        ]
         
-        response = requests.post(
-            f"{ESIM_API_URL}/api/v1/open/country/list",
-            headers=get_esim_headers(),
-            json={},
-            timeout=10
-        )
+        response = None
+        for endpoint in endpoints:
+            print(f"🔍 Trying: {ESIM_API_URL}{endpoint}")
+            response = requests.post(
+                f"{ESIM_API_URL}{endpoint}",
+                headers=get_esim_headers(),
+                json={},
+                timeout=10
+            )
+            if response.status_code == 200:
+                print(f"✅ Found working endpoint: {endpoint}")
+                break
         
-        print(f"🔍 Countries API response status: {response.status_code}")
-        
-        if response.status_code == 200:
+        if response and response.status_code == 200:
             data = response.json()
             if data.get('success'):
                 countries = data.get('obj', {}).get('countryList', [])
@@ -747,20 +757,12 @@ async def get_countries(user: dict = Depends(get_current_user)):
                     "countries": formatted_countries,
                     "total": len(formatted_countries)
                 }
-            else:
-                print(f"❌ API error: {data.get('errorMsg', 'Unknown')}")
-                return get_mock_countries()
-        else:
-            print(f"❌ API returned status: {response.status_code}, response: {response.text}")
-            return get_mock_countries()
-            
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Network error: {e}")
+        
+        print("⚠️ No working endpoint found, returning mock data")
         return get_mock_countries()
+            
     except Exception as e:
-        print(f"❌ Unexpected error: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ Countries API error: {e}")
         return get_mock_countries()
 
 def get_mock_countries():
