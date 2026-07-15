@@ -2175,6 +2175,8 @@ class _HomeScreenState extends State<HomeScreen> {
   void _confirmPurchaseReal(BuildContext context, String country, String planName, String price, String planId, {String? countryCode}) {
     // Clean the price (remove $ sign)
     final cleanPrice = price.replaceAll('\$', '').trim();
+
+    showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E3A5F),
@@ -2201,7 +2203,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context); // Close dialog
-              
+
               // Show loading
               showDialog(
                 context: context,
@@ -2210,13 +2212,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: CircularProgressIndicator(),
                 ),
               );
-              
+
               try {
-                // Real purchase
                 final result = await ApiService.purchasePlan(planId, countryCode ?? country);
-                
+
                 Navigator.pop(context); // Close loading
-                
+
                 if (result['success'] == true) {
                   _showPurchaseSuccess(context);
                 } else {
