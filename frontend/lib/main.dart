@@ -2173,6 +2173,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
   void _confirmPurchaseReal(BuildContext context, String country, String planName, String price, String planId, {String? countryCode}) {
+    // Clean the price (remove $ sign)
     final cleanPrice = price.replaceAll('\$', '').trim();
       context: context,
       builder: (context) => AlertDialog(
