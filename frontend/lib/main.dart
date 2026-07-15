@@ -2136,7 +2136,7 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'price,
+                price,
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
