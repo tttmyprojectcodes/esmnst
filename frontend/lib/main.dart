@@ -2049,7 +2049,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     // ✅ FIX: Use _buildPlanCardReal (not _buildPlanCard)
                     return _buildPlanCardReal(
                       plan['name'] ?? 'Plan',
-                      '${plan['data'] ?? 0}GB',
+                      '${((plan['data'] ?? 0) / 1073741824).toStringAsFixed(1)}GB',
                       '${plan['validity'] ?? 0} Days',
                       '\$${plan['price']?.toStringAsFixed(2) ?? '0.00'}',
                       countryName,
@@ -2211,7 +2211,7 @@ class _HomeScreenState extends State<HomeScreen> {
               
               try {
                 // Real purchase
-                final result = await ApiService.purchasePlan(planId, country);
+                final result = await ApiService.purchasePlan(planId, countryCode);
                 
                 Navigator.pop(context); // Close loading
                 
