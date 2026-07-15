@@ -2136,7 +2136,7 @@ class _HomeScreenState extends State<HomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '\$${(double.parse(price) / 100).toStringAsFixed(2)}',
+                price,
                 style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
@@ -2173,7 +2173,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
   void _confirmPurchaseReal(BuildContext context, String country, String planName, String price, String planId, {String? countryCode}) {
-    showDialog(
+    final cleanPrice = price.replaceAll('\$', '').trim();
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1E3A5F),
@@ -2184,7 +2184,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Text('🌍 $country'),
             Text('📶 $planName'),
-            Text('💰 $price'),
+            Text('💰 \$$cleanPrice'),
             const SizedBox(height: 16),
             const Text(
               'Your wallet will be debited',
