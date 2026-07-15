@@ -822,7 +822,8 @@ async def get_plans(
                 
                 formatted_plans = []
                 for plan in packages:
-                    wholesale_price = plan.get('price', 0)
+                    wholesale_price_cents = plan.get('price', 0)
+                    wholesale_price = wholesale_price_cents / 100
                     retail_price = wholesale_price * MARKUP_MULTIPLIER
                     retail_price = round(retail_price, 2)
                     
