@@ -2054,6 +2054,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       '\$${plan['price']?.toStringAsFixed(2) ?? '0.00'}',
                       countryName,
                       plan['id'] ?? '',
+                      countryCode: plan['countryCode'] ?? '',
                     );
                   },
                 ),
@@ -2078,7 +2079,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
   }
-  Widget _buildPlanCardReal(String name, String data, String validity, String price, String country, String planId) {
+  Widget _buildPlanCardReal(String name, String data, String validity, String price, String country, String planId, {String? countryCode}) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -2145,7 +2146,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ElevatedButton(
                 onPressed: () {
                   Navigator.pop(context);
-                  _confirmPurchaseReal(context, country, name, price, planId);
+                  _confirmPurchaseReal(context, country, name, price, planId, countryCode: countryCode);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFFF59E0B),
