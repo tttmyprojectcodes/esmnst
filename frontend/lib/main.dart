@@ -2212,7 +2212,7 @@ class _HomeScreenState extends State<HomeScreen> {
               
               try {
                 // Real purchase
-                final result = await ApiService.purchasePlan(planId, countryCode);
+                final result = await ApiService.purchasePlan(planId, countryCode ?? country);
                 
                 Navigator.pop(context); // Close loading
                 
