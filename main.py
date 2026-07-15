@@ -822,7 +822,8 @@ async def get_plans(
                 
                 formatted_plans = []
                 for plan in packages:
-                    wholesale_price = plan.get('price', 0)
+                    wholesale_price_cents = plan.get('price', 0)
+                    wholesale_price = wholesale_price_cents / 100
                     retail_price = wholesale_price * MARKUP_MULTIPLIER
                     
                     formatted_plans.append({
@@ -956,7 +957,8 @@ async def purchase_esim(purchase: PurchasePlan, user: dict = Depends(get_current
         if not plan:
             raise HTTPException(status_code=404, detail="Plan not found")
         
-        wholesale_price = plan.get('price', 0)
+        wholesale_price_cents = plan.get('price', 0)
+        wholesale_price = wholesale_price_cents / 100
         retail_price = wholesale_price * MARKUP_MULTIPLIER
         
         # Check wallet balance
