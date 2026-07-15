@@ -2051,7 +2051,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       plan['name'] ?? 'Plan',
                       '${((plan['data'] ?? 0) / 1073741824).toStringAsFixed(1)}GB',
                       '${plan['validity'] ?? 0} Days',
-                      '${(plan['price'] ?? 0) / 100}',  // ← Divide by 100 here too!
+                      '$${(plan['price'] ?? 0) / 100}',  // ← Divide by 100 here too!
                       countryName,
                       plan['id'] ?? '',
                       countryCode: plan['countryCode'] ?? '',
