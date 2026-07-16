@@ -41,6 +41,8 @@ app.add_middleware(
         "https://esmnst-frontend.onrender.com",  # Your frontend's exact URL
         "https://esmnst.onrender.com",           # Your backend URL for testing
         "http://localhost:3000",                 # For local development
+        "https://www.esimnest.online",
+        "https://esimnest.online",
     ],
     allow_credentials=True,
     allow_methods=["*"],
