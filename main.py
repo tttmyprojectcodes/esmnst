@@ -284,7 +284,6 @@ async def capture_paypal_payment(request: dict, user: dict = Depends(get_current
 async def create_razorpay_order(request: dict, user: dict = Depends(get_current_user)):
     """Create a Razorpay order"""
     try:
-        # ✅ Check if Razorpay client is initialized
         if razorpay_client is None:
             print("❌ Razorpay client is None! Check keys.")
             raise HTTPException(status_code=400, detail="Razorpay not configured")
@@ -295,9 +294,8 @@ async def create_razorpay_order(request: dict, user: dict = Depends(get_current_
         if not amount or amount <= 0:
             raise HTTPException(status_code=400, detail="Invalid amount")
         
-        # Create order in Razorpay
         order_data = {
-            'amount': int(amount * 100),  # Convert to paise
+            'amount': int(amount * 100),
             'currency': 'INR',
             'receipt': f'{user["uid"][:20]}_{int(time.time())}'[:40],
             'payment_capture': 1
@@ -306,6 +304,27 @@ async def create_razorpay_order(request: dict, user: dict = Depends(get_current_
         print(f"🔍 Creating Razorpay order: {order_data}")
         order = razorpay_client.order.create(data=order_data)
         print(f"✅ Razorpay order created: {order['id']}")
+        
+        db.collection('razorpay_orders').document(order['id']).set({
+            'userId': uid,
+            'amount': amount,
+            'order_id': order['id'],
+            'status': 'created',
+            'createdAt': firestore.SERVER_TIMESTAMP
+        })
+        
+        return {
+            'success': True,
+            'order_id': order['id'],
+            'amount': amount,
+            'currency': 'INR',
+            'key': RAZORPAY_KEY_ID
+        }
+        
+    except Exception as e:
+        print(f"❌ Razorpay error: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
 
 @app.post("/api/payment/razorpay/verify")
 async def verify_razorpay_payment(request: dict, user: dict = Depends(get_current_user)):
@@ -316,7 +335,6 @@ async def verify_razorpay_payment(request: dict, user: dict = Depends(get_curren
         order_id = request.get('razorpay_order_id')
         signature = request.get('razorpay_signature')
         
-        # Verify signature
         params_dict = {
             'razorpay_payment_id': payment_id,
             'razorpay_order_id': order_id,
@@ -325,7 +343,6 @@ async def verify_razorpay_payment(request: dict, user: dict = Depends(get_curren
         
         razorpay_client.utility.verify_payment_signature(params_dict)
         
-        # Get order details
         order_ref = db.collection('razorpay_orders').document(order_id)
         order_doc = order_ref.get()
         
@@ -335,13 +352,11 @@ async def verify_razorpay_payment(request: dict, user: dict = Depends(get_curren
         order_data = order_doc.to_dict()
         amount = order_data.get('amount', 0)
         
-        # Credit wallet
         user_ref = db.collection('users').document(uid)
         user_ref.update({
             'walletBalance': firestore.Increment(amount)
         })
         
-        # Log transaction
         db.collection('transactions').add({
             'userId': uid,
             'type': 'credit',
@@ -353,7 +368,6 @@ async def verify_razorpay_payment(request: dict, user: dict = Depends(get_curren
             'createdAt': firestore.SERVER_TIMESTAMP
         })
         
-        # Update order status
         order_ref.update({
             'status': 'completed',
             'payment_id': payment_id,
@@ -369,7 +383,7 @@ async def verify_razorpay_payment(request: dict, user: dict = Depends(get_curren
     except SignatureVerificationError:
         raise HTTPException(status_code=400, detail="Signature verification failed")
     except Exception as e:
-        print(f"Verification error: {e}")
+        print(f"❌ Verification error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
