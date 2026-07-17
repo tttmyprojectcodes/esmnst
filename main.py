@@ -74,7 +74,22 @@ ESIM_API_URL = os.getenv('ESIM_API_URL', 'https://api.esimaccess.com')
 MARKUP_MULTIPLIER = float(os.getenv('MARKUP_MULTIPLIER', '2.0'))
 RAZORPAY_KEY_ID = os.getenv('RAZORPAY_KEY_ID')
 RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET')
-razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+
+# ✅ Debug: Print keys (will show in Render logs)
+print(f"🔍 RAZORPAY_KEY_ID: {RAZORPAY_KEY_ID}")
+print(f"🔍 RAZORPAY_KEY_SECRET length: {len(RAZORPAY_KEY_SECRET) if RAZORPAY_KEY_SECRET else 0}")
+
+# ✅ Check if keys exist
+if not RAZORPAY_KEY_ID or not RAZORPAY_KEY_SECRET:
+    print("❌ Razorpay keys are missing from environment variables!")
+    razorpay_client = None
+else:
+    try:
+        razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+        print("✅ Razorpay client initialized successfully")
+    except Exception as e:
+        print(f"❌ Razorpay client init error: {e}")
+        razorpay_client = None
 
 # =====================================================
 # 4. eSIM ACCESS AUTHENTICATION (UPDATED)
@@ -269,6 +284,11 @@ async def capture_paypal_payment(request: dict, user: dict = Depends(get_current
 async def create_razorpay_order(request: dict, user: dict = Depends(get_current_user)):
     """Create a Razorpay order"""
     try:
+        # ✅ Check if Razorpay client is initialized
+        if razorpay_client is None:
+            print("❌ Razorpay client is None! Check keys.")
+            raise HTTPException(status_code=400, detail="Razorpay not configured")
+        
         uid = user['uid']
         amount = request.get('amount')
         
@@ -283,28 +303,9 @@ async def create_razorpay_order(request: dict, user: dict = Depends(get_current_
             'payment_capture': 1
         }
         
+        print(f"🔍 Creating Razorpay order: {order_data}")
         order = razorpay_client.order.create(data=order_data)
-        
-        # Store in Firestore
-        db.collection('razorpay_orders').document(order['id']).set({
-            'userId': uid,
-            'amount': amount,
-            'order_id': order['id'],
-            'status': 'created',
-            'createdAt': firestore.SERVER_TIMESTAMP
-        })
-        
-        return {
-            'success': True,
-            'order_id': order['id'],
-            'amount': amount,
-            'currency': 'INR',
-            'key': RAZORPAY_KEY_ID
-        }
-        
-    except Exception as e:
-        print(f"Razorpay error: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        print(f"✅ Razorpay order created: {order['id']}")
 
 @app.post("/api/payment/razorpay/verify")
 async def verify_razorpay_payment(request: dict, user: dict = Depends(get_current_user)):
