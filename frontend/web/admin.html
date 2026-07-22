@@ -738,21 +738,55 @@ document.querySelector('.modal').addEventListener('click', function(e) { if (e.t
 // ============================================
 console.log('🔄 Initializing admin panel...');
 
-// Wait for Firebase Auth to initialize
-firebase.auth().onAuthStateChanged(function(user) {
+firebase.auth().onAuthStateChanged(async function(user) {
   if (user) {
     console.log('✅ User authenticated:', user.email);
-    console.log('✅ UID:', user.uid);
-    // Now fetch real data
-    fetchRealData();
+    
+    // ✅ CHECK IF USER IS ADMIN
+    try {
+      const userDoc = await firebase.firestore()
+        .collection('users')
+        .doc(user.uid)
+        .get();
+      
+      if (userDoc.exists && userDoc.data().role === 'admin') {
+        console.log('✅ User is ADMIN - loading data');
+        fetchRealData();
+      } else {
+        console.log('❌ User is NOT admin - access denied');
+        showAccessDenied();
+      }
+    } catch (error) {
+      console.error('Error checking admin status:', error);
+      showAccessDenied();
+    }
   } else {
     console.log('❌ No user logged in');
-    // Show mock data
     loadMockData();
     showToast('⚠️ Please login to eSIMNest app first', 'info');
     document.getElementById('pageTitle').innerHTML = '🔐 Login Required';
   }
 });
+
+// ============================================
+// ACCESS DENIED FUNCTION
+// ============================================
+function showAccessDenied() {
+  document.getElementById('page-dashboard').innerHTML = `
+    <div style="text-align:center;padding:80px 20px;">
+      <div style="font-size:60px;margin-bottom:20px;">🚫</div>
+      <h2 style="color:var(--red);">Access Denied</h2>
+      <p style="color:var(--muted);font-size:16px;">You do not have admin privileges.</p>
+      <p style="color:var(--muted);font-size:14px;">Only users with <strong>role: "admin"</strong> can access this panel.</p>
+      <br>
+      <button onclick="window.location.href='https://esmnst-frontend.onrender.com/'" 
+        style="padding:12px 24px;background:var(--gold);border:none;border-radius:8px;font-weight:bold;cursor:pointer;color:#0A1628;">
+        Go to eSIMNest App
+      </button>
+    </div>
+  `;
+  document.getElementById('statsRow').style.display = 'none';
+}
 </script>
 
 </body>
