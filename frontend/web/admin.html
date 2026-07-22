@@ -304,6 +304,8 @@ const firebaseConfig = {
   messagingSenderId: "738532349365",
   appId: "1:738532349365:web:YOUR_APP_ID"
 };
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
 
 // ============================================
 // FETCH REAL DATA FROM FIRESTORE
@@ -393,6 +395,46 @@ async function fetchRealData() {
     loadMockData();
     showToast('Using mock data (Firestore connection failed)', 'error');
   }
+}
+
+}
+// ============================================
+// MOCK DATA (Fallback if Firestore fails)
+// ============================================
+function loadMockData() {
+  users = [
+    { id: 1, name: 'John Doe', email: 'john@example.com', phone: '+1-555-0101', country: 'US', balance: 25.00, orders: 5, status: 'active', role: 'user' },
+    { id: 2, name: 'Sarah P.', email: 'sarah@example.com', phone: '+44-20-1234-5678', country: 'GB', balance: 10.00, orders: 3, status: 'pending', role: 'user' },
+    { id: 3, name: 'Mike R.', email: 'mike@example.com', phone: '+91-98765-43210', country: 'IN', balance: 0.00, orders: 1, status: 'blocked', role: 'user' },
+    { id: 4, name: 'Admin User', email: 'admin@esimnest.com', phone: '+91-99999-88888', country: 'IN', balance: 100.00, orders: 0, status: 'active', role: 'admin' },
+  ];
+  orders = [
+    { id: '#1234', user: 'John Doe', country: 'US', plan: '5GB', amount: 25.00, status: 'delivered' },
+    { id: '#1233', user: 'Sarah P.', country: 'IN', plan: '3GB', amount: 15.00, status: 'processing' },
+    { id: '#1232', user: 'Mike R.', country: 'UK', plan: '10GB', amount: 40.00, status: 'failed' },
+    { id: '#1231', user: 'John Doe', country: 'US', plan: '1GB', amount: 10.00, status: 'pending' },
+  ];
+  payments = [
+    { user: 'John Doe', amount: 25.00, method: 'Razorpay', reference: 'RZP_123456', date: '2026-07-20' },
+    { user: 'Sarah P.', amount: 15.00, method: 'PayPal', reference: 'PAYPAL_7890', date: '2026-07-21' },
+    { user: 'Mike R.', amount: 40.00, method: 'Manual', reference: 'MANUAL_001', date: '2026-07-22' },
+  ];
+  plans = [
+    { id: 1, name: '1GB Data', country: 'US', data: '1GB', validity: '7 Days', price: 10.00 },
+    { id: 2, name: '3GB Data', country: 'US', data: '3GB', validity: '15 Days', price: 20.00 },
+    { id: 3, name: '5GB Data', country: 'US', data: '5GB', validity: '30 Days', price: 30.00 },
+    { id: 4, name: '1GB Data', country: 'IN', data: '1GB', validity: '7 Days', price: 8.00 },
+  ];
+  renderUsers();
+  renderOrders();
+  renderPayments();
+  renderPlans();
+  document.getElementById('totalUsers').textContent = users.length;
+  document.getElementById('totalOrders').textContent = orders.length;
+  let totalRevenue = 0;
+  orders.forEach(o => { if (o.status === 'delivered' || o.status === 'completed') totalRevenue += o.amount; });
+  document.getElementById('totalRevenue').textContent = '$' + totalRevenue.toFixed(2);
+  document.getElementById('pendingPayments').textContent = payments.length;
 }
 // ============================================
 // RENDER FUNCTIONS
