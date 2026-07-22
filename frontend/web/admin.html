@@ -735,15 +735,21 @@ document.querySelector('.modal').addEventListener('click', function(e) { if (e.t
 // ============================================
 // INIT
 // ============================================
-// Wait for Firebase Auth to initialize before loading data
+console.log('🔄 Initializing admin panel...');
+
+// Wait for Firebase Auth to initialize
 firebase.auth().onAuthStateChanged(function(user) {
   if (user) {
-    console.log('✅ Logged in as:', user.email);
+    console.log('✅ User authenticated:', user.email);
+    console.log('✅ UID:', user.uid);
+    // Now fetch real data
     fetchRealData();
   } else {
-    console.log('❌ Not logged in, using mock data');
+    console.log('❌ No user logged in');
+    // Show mock data
     loadMockData();
-    showToast('⚠️ Please login to see real data', 'info');
+    showToast('⚠️ Please login to eSIMNest app first', 'info');
+    document.getElementById('pageTitle').innerHTML = '🔐 Login Required';
   }
 });
 </script>
