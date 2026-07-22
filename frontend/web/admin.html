@@ -283,36 +283,125 @@
      JAVASCRIPT
 ============================================ -->
 <script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 // ============================================
-// DATA
+// DATA (will be replaced with Firestore data)
 // ============================================
-const users = [
-  { id: 1, name: 'John Doe', email: 'john@example.com', phone: '+1-555-0101', country: 'US', balance: 25.00, orders: 5, status: 'active', role: 'user' },
-  { id: 2, name: 'Sarah P.', email: 'sarah@example.com', phone: '+44-20-1234-5678', country: 'GB', balance: 10.00, orders: 3, status: 'pending', role: 'user' },
-  { id: 3, name: 'Mike R.', email: 'mike@example.com', phone: '+91-98765-43210', country: 'IN', balance: 0.00, orders: 1, status: 'blocked', role: 'user' },
-  { id: 4, name: 'Admin User', email: 'admin@esimnest.com', phone: '+91-99999-88888', country: 'IN', balance: 100.00, orders: 0, status: 'active', role: 'admin' },
-];
+let users = [];
+let orders = [];
+let payments = [];
+let plans = [];
 
-const orders = [
-  { id: '#1234', user: 'John Doe', country: 'US', plan: '5GB', amount: 25.00, status: 'delivered' },
-  { id: '#1233', user: 'Sarah P.', country: 'IN', plan: '3GB', amount: 15.00, status: 'processing' },
-  { id: '#1232', user: 'Mike R.', country: 'UK', plan: '10GB', amount: 40.00, status: 'failed' },
-  { id: '#1231', user: 'John Doe', country: 'US', plan: '1GB', amount: 10.00, status: 'pending' },
-  { id: '#1230', user: 'Sarah P.', country: 'JP', plan: '5GB', amount: 30.00, status: 'delivered' },
-];
+// ============================================
+// FIREBASE CONFIG - REPLACE WITH YOUR VALUES
+// ============================================
+const firebaseConfig = {
+  apiKey: "AIzaSyCrDFrYcZ18IksAvlAGXjZGv-M--5kL-mM",
+  authDomain: "esimnest-prod.firebaseapp.com",
+  projectId: "esimnest-prod",
+  storageBucket: "esimnest-prod.appspot.com",
+  messagingSenderId: "738532349365",
+  appId: "1:738532349365:web:YOUR_APP_ID"
+};
 
-const payments = [
-  { user: 'John Doe', amount: 25.00, method: 'Razorpay', reference: 'RZP_123456', date: '2026-07-20' },
-  { user: 'Sarah P.', amount: 15.00, method: 'PayPal', reference: 'PAYPAL_7890', date: '2026-07-21' },
-  { user: 'Mike R.', amount: 40.00, method: 'Manual', reference: 'MANUAL_001', date: '2026-07-22' },
-];
+// ============================================
+// FETCH REAL DATA FROM FIRESTORE
+// ============================================
+async function fetchRealData() {
+  try {
+    // 1. Fetch USERS
+    const usersSnapshot = await firebase.firestore().collection('users').get();
+    users = [];
+    usersSnapshot.forEach(doc => {
+      const data = doc.data();
+      users.push({
+        id: doc.id,
+        name: data.displayName || 'Unknown',
+        email: data.email || '',
+        phone: data.phone || '',
+        country: data.country || '',
+        balance: data.walletBalance || 0,
+        orders: 0,
+        status: 'active',
+        role: 'user'
+      });
+    });
+    renderUsers();
+    document.getElementById('totalUsers').textContent = users.length;
 
-const plans = [
-  { id: 1, name: '1GB Data', country: 'US', data: '1GB', validity: '7 Days', price: 10.00 },
-  { id: 2, name: '3GB Data', country: 'US', data: '3GB', validity: '15 Days', price: 20.00 },
-  { id: 3, name: '5GB Data', country: 'US', data: '5GB', validity: '30 Days', price: 30.00 },
-  { id: 4, name: '1GB Data', country: 'IN', data: '1GB', validity: '7 Days', price: 8.00 },
-];
+    // 2. Fetch ORDERS
+    const ordersSnapshot = await firebase.firestore().collection('orders').get();
+    orders = [];
+    ordersSnapshot.forEach(doc => {
+      const data = doc.data();
+      orders.push({
+        id: doc.id,
+        user: data.userId || 'Unknown',
+        country: data.country || '',
+        plan: data.plan?.name || '',
+        amount: data.amount || 0,
+        status: data.status || 'pending'
+      });
+    });
+    renderOrders();
+    document.getElementById('totalOrders').textContent = orders.length;
+
+    // 3. Calculate REVENUE
+    let totalRevenue = 0;
+    orders.forEach(o => { if (o.status === 'delivered' || o.status === 'completed') totalRevenue += o.amount; });
+    document.getElementById('totalRevenue').textContent = '$' + totalRevenue.toFixed(2);
+
+    // 4. Fetch PENDING PAYMENTS
+    const paymentsSnapshot = await firebase.firestore()
+      .collection('paymentRequests')
+      .where('status', '==', 'pending')
+      .get();
+    payments = [];
+    paymentsSnapshot.forEach(doc => {
+      const data = doc.data();
+      payments.push({
+        user: data.userId || 'Unknown',
+        amount: data.amount || 0,
+        method: data.method || 'Manual',
+        reference: doc.id,
+        date: data.createdAt?.toDate?.()?.toISOString().split('T')[0] || 'N/A'
+      });
+    });
+    renderPayments();
+    document.getElementById('pendingPayments').textContent = payments.length;
+
+    showToast('✅ Real data loaded from Firestore!', 'success');
+  } catch (error) {
+    console.error('Error fetching data:', error);
+    // Load mock data as fallback
+    loadMockData();
+    showToast('Using mock data (Firestore connection failed)', 'error');
+  }
+}
+
+function loadMockData() {
+  users = [
+    { id: 1, name: 'John Doe', email: 'john@example.com', phone: '+1-555-0101', country: 'US', balance: 25.00, orders: 5, status: 'active', role: 'user' },
+    { id: 2, name: 'Sarah P.', email: 'sarah@example.com', phone: '+44-20-1234-5678', country: 'GB', balance: 10.00, orders: 3, status: 'pending', role: 'user' },
+    { id: 3, name: 'Mike R.', email: 'mike@example.com', phone: '+91-98765-43210', country: 'IN', balance: 0.00, orders: 1, status: 'blocked', role: 'user' },
+  ];
+  orders = [
+    { id: '#1234', user: 'John Doe', country: 'US', plan: '5GB', amount: 25.00, status: 'delivered' },
+    { id: '#1233', user: 'Sarah P.', country: 'IN', plan: '3GB', amount: 15.00, status: 'processing' },
+    { id: '#1232', user: 'Mike R.', country: 'UK', plan: '10GB', amount: 40.00, status: 'failed' },
+  ];
+  payments = [
+    { user: 'John Doe', amount: 25.00, method: 'Razorpay', reference: 'RZP_123456', date: '2026-07-20' },
+  ];
+  renderUsers();
+  renderOrders();
+  renderPayments();
+  document.getElementById('totalUsers').textContent = users.length;
+  document.getElementById('totalOrders').textContent = orders.length;
+  document.getElementById('totalRevenue').textContent = '$' + orders.reduce((sum, o) => o.status === 'delivered' ? sum + o.amount : sum, 0).toFixed(2);
+  document.getElementById('pendingPayments').textContent = payments.length;
+}
 
 // ============================================
 // RENDER FUNCTIONS
@@ -624,10 +713,8 @@ document.querySelector('.modal').addEventListener('click', function(e) { if (e.t
 // ============================================
 // INIT
 // ============================================
-renderUsers();
-renderOrders();
-renderPayments();
-renderPlans();
+// Load real data from Firestore
+fetchRealData();
 </script>
 
 </body>
