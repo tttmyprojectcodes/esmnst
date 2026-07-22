@@ -294,7 +294,7 @@ let payments = [];
 let plans = [];
 
 // ============================================
-// FIREBASE CONFIG - REPLACE WITH YOUR VALUES
+// FIREBASE CONFIG
 // ============================================
 const firebaseConfig = {
   apiKey: "AIzaSyCrDFrYcZ18IksAvlAGXjZGv-M--5kL-mM",
@@ -304,6 +304,7 @@ const firebaseConfig = {
   messagingSenderId: "738532349365",
   appId: "1:738532349365:web:YOUR_APP_ID"
 };
+
 // Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 
@@ -312,7 +313,6 @@ firebase.initializeApp(firebaseConfig);
 // ============================================
 async function fetchRealData() {
   try {
-    // Fetch users
     const usersSnapshot = await firebase.firestore().collection('users').get();
     users = [];
     usersSnapshot.forEach(doc => {
@@ -332,7 +332,6 @@ async function fetchRealData() {
     renderUsers();
     document.getElementById('totalUsers').textContent = users.length;
 
-    // Fetch orders
     const ordersSnapshot = await firebase.firestore().collection('orders').get();
     orders = [];
     ordersSnapshot.forEach(doc => {
@@ -349,12 +348,10 @@ async function fetchRealData() {
     renderOrders();
     document.getElementById('totalOrders').textContent = orders.length;
 
-    // Calculate revenue
     let totalRevenue = 0;
     orders.forEach(o => { if (o.status === 'delivered' || o.status === 'completed') totalRevenue += o.amount; });
     document.getElementById('totalRevenue').textContent = '$' + totalRevenue.toFixed(2);
 
-    // Fetch pending payments
     const paymentsSnapshot = await firebase.firestore()
       .collection('paymentRequests')
       .where('status', '==', 'pending')
@@ -373,7 +370,6 @@ async function fetchRealData() {
     renderPayments();
     document.getElementById('pendingPayments').textContent = payments.length;
 
-    // Fetch plans
     const plansSnapshot = await firebase.firestore().collection('plans').get();
     plans = [];
     plansSnapshot.forEach(doc => {
@@ -397,7 +393,6 @@ async function fetchRealData() {
   }
 }
 
-}
 // ============================================
 // MOCK DATA (Fallback if Firestore fails)
 // ============================================
@@ -406,24 +401,19 @@ function loadMockData() {
     { id: 1, name: 'John Doe', email: 'john@example.com', phone: '+1-555-0101', country: 'US', balance: 25.00, orders: 5, status: 'active', role: 'user' },
     { id: 2, name: 'Sarah P.', email: 'sarah@example.com', phone: '+44-20-1234-5678', country: 'GB', balance: 10.00, orders: 3, status: 'pending', role: 'user' },
     { id: 3, name: 'Mike R.', email: 'mike@example.com', phone: '+91-98765-43210', country: 'IN', balance: 0.00, orders: 1, status: 'blocked', role: 'user' },
-    { id: 4, name: 'Admin User', email: 'admin@esimnest.com', phone: '+91-99999-88888', country: 'IN', balance: 100.00, orders: 0, status: 'active', role: 'admin' },
   ];
   orders = [
     { id: '#1234', user: 'John Doe', country: 'US', plan: '5GB', amount: 25.00, status: 'delivered' },
     { id: '#1233', user: 'Sarah P.', country: 'IN', plan: '3GB', amount: 15.00, status: 'processing' },
     { id: '#1232', user: 'Mike R.', country: 'UK', plan: '10GB', amount: 40.00, status: 'failed' },
-    { id: '#1231', user: 'John Doe', country: 'US', plan: '1GB', amount: 10.00, status: 'pending' },
   ];
   payments = [
     { user: 'John Doe', amount: 25.00, method: 'Razorpay', reference: 'RZP_123456', date: '2026-07-20' },
-    { user: 'Sarah P.', amount: 15.00, method: 'PayPal', reference: 'PAYPAL_7890', date: '2026-07-21' },
-    { user: 'Mike R.', amount: 40.00, method: 'Manual', reference: 'MANUAL_001', date: '2026-07-22' },
   ];
   plans = [
     { id: 1, name: '1GB Data', country: 'US', data: '1GB', validity: '7 Days', price: 10.00 },
     { id: 2, name: '3GB Data', country: 'US', data: '3GB', validity: '15 Days', price: 20.00 },
     { id: 3, name: '5GB Data', country: 'US', data: '5GB', validity: '30 Days', price: 30.00 },
-    { id: 4, name: '1GB Data', country: 'IN', data: '1GB', validity: '7 Days', price: 8.00 },
   ];
   renderUsers();
   renderOrders();
@@ -432,10 +422,11 @@ function loadMockData() {
   document.getElementById('totalUsers').textContent = users.length;
   document.getElementById('totalOrders').textContent = orders.length;
   let totalRevenue = 0;
-  orders.forEach(o => { if (o.status === 'delivered' || o.status === 'completed') totalRevenue += o.amount; });
+  orders.forEach(o => { if (o.status === 'delivered') totalRevenue += o.amount; });
   document.getElementById('totalRevenue').textContent = '$' + totalRevenue.toFixed(2);
   document.getElementById('pendingPayments').textContent = payments.length;
 }
+
 // ============================================
 // RENDER FUNCTIONS
 // ============================================
@@ -450,11 +441,11 @@ function renderUsers() {
       <td>${u.orders}</td>
       <td><span class="badge ${u.status}">${u.status.charAt(0).toUpperCase() + u.status.slice(1)}</span></td>
       <td>
-        <button class="btn-sm btn-blue" onclick="viewUser(${u.id})">View</button>
-        <button class="btn-sm btn-gold" onclick="editUser(${u.id})">Edit</button>
+        <button class="btn-sm btn-blue" onclick="viewUser('${u.id}')">View</button>
+        <button class="btn-sm btn-gold" onclick="editUser('${u.id}')">Edit</button>
         ${u.status === 'blocked' 
-          ? `<button class="btn-sm btn-green" onclick="toggleUser(${u.id},'active')">Unblock</button>`
-          : `<button class="btn-sm btn-red" onclick="toggleUser(${u.id},'blocked')">Block</button>`
+          ? `<button class="btn-sm btn-green" onclick="toggleUser('${u.id}','active')">Unblock</button>`
+          : `<button class="btn-sm btn-red" onclick="toggleUser('${u.id}','blocked')">Block</button>`
         }
       </td>
     </tr>
@@ -510,8 +501,8 @@ function renderPlans() {
       <td>${p.validity}</td>
       <td>$${p.price.toFixed(2)}</td>
       <td>
-        <button class="btn-sm btn-gold" onclick="editPlan(${p.id})">Edit</button>
-        <button class="btn-sm btn-red" onclick="deletePlan(${p.id})">Delete</button>
+        <button class="btn-sm btn-gold" onclick="editPlan('${p.id}')">Edit</button>
+        <button class="btn-sm btn-red" onclick="deletePlan('${p.id}')">Delete</button>
       </td>
     </tr>
   `).join('') || '<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:20px;">No plans added yet</td></tr>';
@@ -521,19 +512,19 @@ function renderPlans() {
 // ACTIONS
 // ============================================
 function viewUser(id) {
-  const u = users.find(x => x.id === id);
+  const u = users.find(x => x.id == id);
   if (!u) return;
   alert(`👤 USER DETAILS\n\nName: ${u.name}\nEmail: ${u.email}\nPhone: ${u.phone}\nCountry: ${u.country}\nBalance: $${u.balance.toFixed(2)}\nOrders: ${u.orders}\nStatus: ${u.status}\nRole: ${u.role}`);
 }
 
 function editUser(id) {
-  const u = users.find(x => x.id === id);
+  const u = users.find(x => x.id == id);
   if (!u) return;
   openModal('user', u);
 }
 
 function toggleUser(id, status) {
-  const u = users.find(x => x.id === id);
+  const u = users.find(x => x.id == id);
   if (!u) return;
   const action = status === 'blocked' ? 'BLOCK' : 'UNBLOCK';
   if (!confirm(`Are you sure you want to ${action} user "${u.name}"?`)) return;
@@ -555,13 +546,13 @@ function rejectPayment(ref) {
 }
 
 function editPlan(id) {
-  const p = plans.find(x => x.id === id);
+  const p = plans.find(x => x.id == id);
   if (!p) return;
   openModal('plan', p);
 }
 
 function deletePlan(id) {
-  const idx = plans.findIndex(x => x.id === id);
+  const idx = plans.findIndex(x => x.id == id);
   if (idx === -1) return;
   if (!confirm('Delete this plan?')) return;
   plans.splice(idx, 1);
@@ -570,7 +561,6 @@ function deletePlan(id) {
 }
 
 function filterOrders() {
-  // Simple filter for demo
   renderOrders();
 }
 
@@ -629,7 +619,7 @@ function saveModal(e) {
     const email = document.getElementById('f_email')?.value.trim();
     if (!name || !email) { showToast('Name and Email are required', 'error'); return; }
     if (editId) {
-      const u = users.find(x => x.id === editId);
+      const u = users.find(x => x.id == editId);
       if (u) {
         u.name = name;
         u.email = email;
@@ -659,7 +649,7 @@ function saveModal(e) {
     const name = document.getElementById('f_plan_name')?.value.trim();
     if (!name) { showToast('Plan name is required', 'error'); return; }
     if (editId) {
-      const p = plans.find(x => x.id === editId);
+      const p = plans.find(x => x.id == editId);
       if (p) {
         p.name = name;
         p.country = document.getElementById('f_plan_country')?.value.trim() || '';
@@ -729,7 +719,6 @@ document.querySelectorAll('.sidebar nav a').forEach(link => {
       settings: '⚙️ Settings'
     };
     document.getElementById('pageTitle').textContent = titles[page] || page;
-    // Refresh tables
     if (page === 'users') renderUsers();
     if (page === 'orders') renderOrders();
     if (page === 'payments') renderPayments();
@@ -746,7 +735,6 @@ document.querySelector('.modal').addEventListener('click', function(e) { if (e.t
 // ============================================
 // INIT
 // ============================================
-// Load real data from Firestore
 fetchRealData();
 </script>
 
