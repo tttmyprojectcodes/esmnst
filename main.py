@@ -74,6 +74,11 @@ ESIM_API_URL = os.getenv('ESIM_API_URL', 'https://api.esimaccess.com')
 MARKUP_MULTIPLIER = float(os.getenv('MARKUP_MULTIPLIER', '2.0'))
 RAZORPAY_KEY_ID = os.getenv('RAZORPAY_KEY_ID')
 RAZORPAY_KEY_SECRET = os.getenv('RAZORPAY_KEY_SECRET')
+# PayPal Configuration
+PAYPAL_CLIENT_ID = os.getenv('PAYPAL_CLIENT_ID')
+PAYPAL_CLIENT_SECRET = os.getenv('PAYPAL_CLIENT_SECRET')
+PAYPAL_API_URL = os.getenv('PAYPAL_API_URL', 'https://api-m.paypal.com')  # Live
+
 
 # ✅ Debug: Print keys (will show in Render logs)
 print(f"🔍 RAZORPAY_KEY_ID: {RAZORPAY_KEY_ID}")
@@ -239,45 +244,183 @@ async def create_paypal_order(request: dict, user: dict = Depends(get_current_us
         if amount <= 0:
             raise HTTPException(status_code=400, detail="Invalid amount")
         
-        # PayPal API call (simplified - use actual PayPal SDK in production)
-        # For now, return a mock response
+        if not PAYPAL_CLIENT_ID or not PAYPAL_CLIENT_SECRET:
+            raise HTTPException(status_code=400, detail="PayPal not configured")
+        
+        # Get PayPal access token
+        auth_response = requests.post(
+            f"{PAYPAL_API_URL}/v1/oauth2/token",
+            auth=(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET),
+            data={"grant_type": "client_credentials"},
+            timeout=30
+        )
+        
+        if auth_response.status_code != 200:
+            print(f"❌ PayPal auth failed: {auth_response.text}")
+            raise HTTPException(status_code=400, detail="PayPal authentication failed")
+        
+        access_token = auth_response.json().get('access_token')
+        
+        # Create order
+        order_response = requests.post(
+            f"{PAYPAL_API_URL}/v2/checkout/orders",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "intent": "CAPTURE",
+                "purchase_units": [{
+                    "amount": {
+                        "currency_code": currency,
+                        "value": str(round(amount, 2))
+                    },
+                    "description": f"eSIMNest Wallet Top-up - {user['uid'][:10]}"
+                }],
+                "application_context": {
+                    "return_url": "https://www.esimnest.online/wallet",
+                    "cancel_url": "https://www.esimnest.online/wallet",
+                    "brand_name": "eSIMNest",
+                    "shipping_preference": "NO_SHIPPING"
+                }
+            },
+            timeout=30
+        )
+        
+        if order_response.status_code not in [200, 201]:
+            print(f"❌ PayPal order failed: {order_response.text}")
+            raise HTTPException(status_code=400, detail="PayPal order creation failed")
+        
+        order_data = order_response.json()
+        
+        # Store order in Firestore
+        db.collection('paypal_orders').document(order_data['id']).set({
+            'userId': user['uid'],
+            'amount': amount,
+            'currency': currency,
+            'status': 'created',
+            'order_data': order_data,
+            'createdAt': firestore.SERVER_TIMESTAMP
+        })
+        
+        # Get approval link
+        approval_url = None
+        for link in order_data.get('links', []):
+            if link.get('rel') == 'approve':
+                approval_url = link.get('href')
+                break
+        
+        if not approval_url:
+            raise HTTPException(status_code=400, detail="No approval URL found")
+        
         return {
             "success": True,
-            "payment_id": f"PAY-{secrets.token_hex(8)}",
-            "approval_url": f"https://www.paypal.com/checkoutnow?token={secrets.token_hex(16)}"
+            "order_id": order_data['id'],
+            "approval_url": approval_url,
+            "amount": amount,
+            "currency": currency
         }
+        
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"❌ PayPal create order error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/payment/paypal/capture")
 async def capture_paypal_payment(request: dict, user: dict = Depends(get_current_user)):
     try:
-        payment_id = request.get('payment_id')
+        order_id = request.get('order_id')
         
-        # In production, call PayPal API to capture payment
-        # For now, simulate successful capture
+        if not order_id:
+            raise HTTPException(status_code=400, detail="Order ID required")
+        
+        if not PAYPAL_CLIENT_ID or not PAYPAL_CLIENT_SECRET:
+            raise HTTPException(status_code=400, detail="PayPal not configured")
+        
+        # Check if order exists in Firestore
+        order_ref = db.collection('paypal_orders').document(order_id)
+        order_doc = order_ref.get()
+        
+        if not order_doc.exists:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        order_data = order_doc.to_dict()
+        
+        # Verify this order belongs to the user
+        if order_data.get('userId') != user['uid']:
+            raise HTTPException(status_code=403, detail="Unauthorized")
+        
+        # Get PayPal access token
+        auth_response = requests.post(
+            f"{PAYPAL_API_URL}/v1/oauth2/token",
+            auth=(PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET),
+            data={"grant_type": "client_credentials"},
+            timeout=30
+        )
+        
+        if auth_response.status_code != 200:
+            raise HTTPException(status_code=400, detail="PayPal authentication failed")
+        
+        access_token = auth_response.json().get('access_token')
+        
+        # Capture the order
+        capture_response = requests.post(
+            f"{PAYPAL_API_URL}/v2/checkout/orders/{order_id}/capture",
+            headers={
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            },
+            json={},
+            timeout=30
+        )
+        
+        if capture_response.status_code not in [200, 201]:
+            print(f"❌ PayPal capture failed: {capture_response.text}")
+            raise HTTPException(status_code=400, detail="Payment capture failed")
+        
+        capture_data = capture_response.json()
+        
+        # Get amount from the capture
+        amount = float(capture_data.get('purchase_units', [{}])[0].get('payments', {}).get('captures', [{}])[0].get('amount', {}).get('value', 0))
+        currency = capture_data.get('purchase_units', [{}])[0].get('payments', {}).get('captures', [{}])[0].get('amount', {}).get('currency_code', 'USD')
         
         # Credit wallet
         db.collection('users').document(user['uid']).update({
-            'walletBalance': firestore.Increment(100.0)  # Mock amount
+            'walletBalance': firestore.Increment(amount)
         })
         
+        # Log transaction
         db.collection('transactions').add({
             'userId': user['uid'],
             'type': 'credit',
-            'amount': 100.0,
-            'currency': 'USD',
-            'description': f'Added via PayPal (Payment: {payment_id})',
+            'amount': amount,
+            'currency': currency,
+            'description': f'Added money via PayPal (Order: {order_id})',
+            'reference': order_id,
             'status': 'completed',
             'createdAt': firestore.SERVER_TIMESTAMP
+        })
+        
+        # Update order status
+        order_ref.update({
+            'status': 'completed',
+            'capture_data': capture_data,
+            'capturedAt': firestore.SERVER_TIMESTAMP
         })
         
         return {
             "success": True,
             "message": "Payment captured successfully",
-            "amount": 100.0
+            "amount": amount,
+            "currency": currency,
+            "capture_id": capture_data.get('purchase_units', [{}])[0].get('payments', {}).get('captures', [{}])[0].get('id')
         }
+        
+    except HTTPException:
+        raise
     except Exception as e:
+        print(f"❌ PayPal capture error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
 
 @app.post("/api/payment/razorpay/create-order")
