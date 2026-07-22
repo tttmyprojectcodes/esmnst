@@ -735,7 +735,17 @@ document.querySelector('.modal').addEventListener('click', function(e) { if (e.t
 // ============================================
 // INIT
 // ============================================
-fetchRealData();
+// Wait for Firebase Auth to initialize before loading data
+firebase.auth().onAuthStateChanged(function(user) {
+  if (user) {
+    console.log('✅ Logged in as:', user.email);
+    fetchRealData();
+  } else {
+    console.log('❌ Not logged in, using mock data');
+    loadMockData();
+    showToast('⚠️ Please login to see real data', 'info');
+  }
+});
 </script>
 
 </body>
