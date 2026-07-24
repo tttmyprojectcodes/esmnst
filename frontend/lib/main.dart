@@ -19,6 +19,7 @@ import 'dart:js_util' as js_util;
 import 'dart:html' as html;
 import 'services/razorpay_service.dart';
 import 'data/legal_content.dart';
+import 'screens/phone_verification.dart';
 
 // =====================================================
 // 1. BRAND CONSTANTS
