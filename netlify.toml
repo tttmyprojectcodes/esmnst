@@ -1,17 +1,17 @@
 [build]
-  base = "frontend"
-  publish = "build/web"
+  base = "."
+  publish = "frontend/build/web"
   command = """
-    curl -o flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.22.5-stable.tar.xz
-    tar -xf flutter.tar.xz
-    export PATH="$PATH:$(pwd)/flutter/bin"
-    flutter pub get
-    flutter build web --release \
-      --dart-define=FIREBASE_API_KEY=${FIREBASE_API_KEY} \
-      --dart-define=FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN} \
-      --dart-define=FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID} \
-      --dart-define=FIREBASE_STORAGE_BUCKET=${FIREBASE_STORAGE_BUCKET} \
-      --dart-define=FIREBASE_MESSAGING_SENDER_ID=${FIREBASE_MESSAGING_SENDER_ID} \
-      --dart-define=FIREBASE_APP_ID=${FIREBASE_APP_ID} \
-      --dart-define=API_URL=${API_URL}
+    cd frontend
+    chmod +x build.sh
+    ./build.sh
   """
+
+[build.environment]
+  API_URL = "https://esmnst.onrender.com/api"
+  FIREBASE_API_KEY = "AIzaSyCrDFrYcZ18IksAvlAGXjZGv-M--5kL-mM"
+  FIREBASE_AUTH_DOMAIN = "esimnest-prod.firebaseapp.com"
+  FIREBASE_PROJECT_ID = "esimnest-prod"
+  FIREBASE_STORAGE_BUCKET = "esimnest-prod.appspot.com"
+  FIREBASE_MESSAGING_SENDER_ID = "738532349365"
+  FIREBASE_APP_ID = "1:738532349365:web:YOUR_APP_ID"
