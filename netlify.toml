@@ -2,9 +2,16 @@
   base = "frontend"
   publish = "build/web"
   command = """
-    git clone https://github.com/flutter/flutter.git -b stable
+    curl -o flutter.tar.xz https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_3.22.5-stable.tar.xz
+    tar -xf flutter.tar.xz
     export PATH="$PATH:$(pwd)/flutter/bin"
-    flutter doctor
     flutter pub get
-    flutter build web --release
+    flutter build web --release \
+      --dart-define=FIREBASE_API_KEY=${FIREBASE_API_KEY} \
+      --dart-define=FIREBASE_AUTH_DOMAIN=${FIREBASE_AUTH_DOMAIN} \
+      --dart-define=FIREBASE_PROJECT_ID=${FIREBASE_PROJECT_ID} \
+      --dart-define=FIREBASE_STORAGE_BUCKET=${FIREBASE_STORAGE_BUCKET} \
+      --dart-define=FIREBASE_MESSAGING_SENDER_ID=${FIREBASE_MESSAGING_SENDER_ID} \
+      --dart-define=FIREBASE_APP_ID=${FIREBASE_APP_ID} \
+      --dart-define=API_URL=${API_URL}
   """
