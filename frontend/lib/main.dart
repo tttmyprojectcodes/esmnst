@@ -448,11 +448,42 @@ class SplashScreen extends StatelessWidget {
 // EMAIL VERIFICATION SCREEN
 // =====================================================
 
-class EmailVerificationScreen extends StatelessWidget {
+class EmailVerificationScreen extends StatefulWidget {
   const EmailVerificationScreen({super.key});
 
   @override
+  State<EmailVerificationScreen> createState() => _EmailVerificationScreenState();
+}
+
+class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
+  bool _isLoading = false;
+
+  Future<void> _resendVerificationEmail() async {
+    setState(() => _isLoading = true);
+    try {
+      await FirebaseAuth.instance.currentUser?.sendEmailVerification();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Verification email resent!'),
+            backgroundColor: Color(0xFF10B981),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
     return Scaffold(
       body: Container(
         decoration: const BoxDecoration(
@@ -483,7 +514,7 @@ class EmailVerificationScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'We sent it to: ${FirebaseAuth.instance.currentUser?.email ?? ''}',
+                    'We sent it to: ${user?.email ?? ''}',
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
                   ),
@@ -492,20 +523,14 @@ class EmailVerificationScreen extends StatelessWidget {
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton(
-                      onPressed: () async {
-                        await FirebaseAuth.instance.currentUser?.sendEmailVerification();
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Verification email resent!'),
-                            backgroundColor: Color(0xFF10B981),
-                          ),
-                        );
-                      },
+                      onPressed: _isLoading ? null : _resendVerificationEmail,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFFF59E0B),
                         foregroundColor: const Color(0xFF0A1628),
                       ),
-                      child: const Text('Resend Email'),
+                      child: _isLoading
+                          ? const CircularProgressIndicator()
+                          : const Text('Resend Email'),
                     ),
                   ),
                   const SizedBox(height: 12),
