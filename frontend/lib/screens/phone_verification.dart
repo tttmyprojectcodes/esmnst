@@ -3,24 +3,30 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PhoneVerificationScreen extends StatefulWidget {
-  const PhoneVerificationScreen({super.key});
+  final String? phoneNumber;
+  
+  const PhoneVerificationScreen({super.key, this.phoneNumber});
 
   @override
   State<PhoneVerificationScreen> createState() => _PhoneVerificationScreenState();
 }
 
 class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
-  final TextEditingController _phoneController = TextEditingController();
   final TextEditingController _otpController = TextEditingController();
   bool _isLoading = false;
   bool _otpSent = false;
   String _verificationId = '';
+  String _phoneNumber = '';
   int _resendTimer = 30;
   bool _canResend = false;
 
   @override
   void initState() {
     super.initState();
+    _phoneNumber = widget.phoneNumber ?? '';
+    if (_phoneNumber.isNotEmpty) {
+      _sendOTP();
+    }
     _startTimer();
   }
 
@@ -42,9 +48,9 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
   }
 
   Future<void> _sendOTP() async {
-    if (_phoneController.text.length < 10) {
+    if (_phoneNumber.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter a valid phone number')),
+        const SnackBar(content: Text('Phone number is required')),
       );
       return;
     }
@@ -52,12 +58,12 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     setState(() => _isLoading = true);
     try {
       await FirebaseAuth.instance.verifyPhoneNumber(
-        phoneNumber: '+91${_phoneController.text.trim()}',
+        phoneNumber: _phoneNumber,
         verificationCompleted: (PhoneAuthCredential credential) async {
           await FirebaseAuth.instance.signInWithCredential(credential);
           if (mounted) {
             _updateUserPhone();
-            Navigator.pop(context);
+            Navigator.pushReplacementNamed(context, '/home');
           }
         },
         verificationFailed: (FirebaseAuthException e) {
@@ -109,7 +115,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
       await FirebaseAuth.instance.signInWithCredential(credential);
       _updateUserPhone();
       if (mounted) {
-        Navigator.pop(context);
+        Navigator.pushReplacementNamed(context, '/home');
       }
     } catch (e) {
       setState(() => _isLoading = false);
@@ -123,7 +129,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user != null) {
       await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-        'phone': _phoneController.text.trim(),
+        'phone': _phoneNumber.replaceAll('+91', ''),
         'phoneVerified': true,
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -133,7 +139,13 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Verify Phone Number')),
+      appBar: AppBar(
+        title: const Text('Verify Phone Number'),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.pushReplacementNamed(context, '/home'),
+        ),
+      ),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -146,40 +158,16 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
               style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
-            const Text(
-              'We\'ll send a 6-digit OTP to verify your number.',
-              style: TextStyle(color: Color(0xFF94A3B8)),
+            Text(
+              'We sent a 6-digit OTP to: $_phoneNumber',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
             ),
             const SizedBox(height: 32),
             if (!_otpSent) ...[
-              TextField(
-                controller: _phoneController,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  labelText: 'Phone Number',
-                  prefixText: '+91 ',
-                  prefixStyle: TextStyle(color: Colors.white),
-                  border: OutlineInputBorder(),
-                  helperText: 'Enter 10-digit phone number',
-                ),
-                keyboardType: TextInputType.phone,
-                maxLength: 10,
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: _isLoading ? null : _sendOTP,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF59E0B),
-                    foregroundColor: const Color(0xFF0A1628),
-                  ),
-                  child: _isLoading
-                      ? const CircularProgressIndicator()
-                      : const Text('Send OTP', style: TextStyle(fontSize: 16)),
-                ),
-              ),
+              const CircularProgressIndicator(),
+              const SizedBox(height: 16),
+              const Text('Sending OTP...', style: TextStyle(color: Color(0xFF94A3B8))),
             ] else ...[
               TextField(
                 controller: _otpController,
