@@ -328,7 +328,15 @@ class MyApp extends StatelessWidget {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SplashScreen();
         }
+        
         if (snapshot.hasData) {
+          final user = snapshot.data!;
+          
+          // ✅ Check if email is verified (for email/password users)
+          if (!user.emailVerified && user.email != null && user.providerData.first.providerId == 'password') {
+            return const EmailVerificationScreen();
+          }
+          
           return const MainScreen();
         }
         return const LoginScreen();
@@ -436,6 +444,96 @@ class SplashScreen extends StatelessWidget {
   }
 }
 
+// =====================================================
+// EMAIL VERIFICATION SCREEN
+// =====================================================
+
+class EmailVerificationScreen extends StatelessWidget {
+  const EmailVerificationScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF0A1628), Color(0xFF1E3A5F)],
+          ),
+        ),
+        child: SafeArea(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.email_outlined, size: 80, color: Color(0xFFF59E0B)),
+                  const SizedBox(height: 24),
+                  const Text(
+                    'Verify Your Email',
+                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Please check your email and click the verification link.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 16),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'We sent it to: ${FirebaseAuth.instance.currentUser?.email ?? ''}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+                  ),
+                  const SizedBox(height: 32),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton(
+                      onPressed: () async {
+                        await FirebaseAuth.instance.currentUser?.sendEmailVerification();
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Verification email resent!'),
+                            backgroundColor: Color(0xFF10B981),
+                          ),
+                        );
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFFF59E0B),
+                        foregroundColor: const Color(0xFF0A1628),
+                      ),
+                      child: const Text('Resend Email'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: OutlinedButton(
+                      onPressed: () async {
+                        await FirebaseAuth.instance.signOut();
+                        if (mounted) {
+                          Navigator.pushReplacementNamed(context, '/login');
+                        }
+                      },
+                      style: OutlinedButton.styleFrom(
+                        side: const BorderSide(color: Colors.white),
+                      ),
+                      child: const Text('Back to Login', style: TextStyle(color: Colors.white)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
 // =====================================================
 // 5. LOGIN SCREEN
 // =====================================================
@@ -755,72 +853,115 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscureConfirmPassword = true;
 
   Future<void> _register() async {
-    if (_nameController.text.isEmpty ||
-        _emailController.text.isEmpty ||
-        _phoneController.text.isEmpty ||
-        _countryController.text.isEmpty ||
-        _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please fill in all fields')),
-      );
-      return;
-    }
-
-    if (_passwordController.text != _confirmPasswordController.text) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Passwords do not match')),
-      );
-      return;
-    }
-
-    if (_passwordController.text.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Password must be at least 6 characters')),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    try {
-      final userCredential = await FirebaseAuth.instance
-          .createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-      );
-
-      // Update display name
-      await userCredential.user?.updateDisplayName(_nameController.text.trim());
-
-      // Create user document in Firestore
-      await FirebaseFirestore.instance
-          .collection('users')
-          .doc(userCredential.user!.uid)
-          .set({
-        'email': _emailController.text.trim(),
-        'displayName': _nameController.text.trim(),
-        'phone': _phoneController.text.trim(),
-        'country': _countryController.text.trim(),
-        'walletBalance': 0.0,
-        'walletCurrency': 'USD',
-        'role': 'user',
-        'kycVerified': false,
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'referralCode': _generateReferralCode(),
-        'referredBy': '',
-      });
-
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/home');
-      }
-    } on FirebaseAuthException catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message ?? 'Registration failed')),
-      );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+  if (_nameController.text.isEmpty ||
+      _emailController.text.isEmpty ||
+      _phoneController.text.isEmpty ||
+      _countryController.text.isEmpty ||
+      _passwordController.text.isEmpty) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Please fill in all fields')),
+    );
+    return;
   }
+
+  if (_passwordController.text != _confirmPasswordController.text) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Passwords do not match')),
+    );
+    return;
+  }
+
+  if (_passwordController.text.length < 6) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Password must be at least 6 characters')),
+    );
+    return;
+  }
+
+  setState(() => _isLoading = true);
+  try {
+    final userCredential = await FirebaseAuth.instance
+        .createUserWithEmailAndPassword(
+      email: _emailController.text.trim(),
+      password: _passwordController.text.trim(),
+    );
+
+    // ✅ Send email verification
+    await userCredential.user?.sendEmailVerification();
+    
+    // Update display name
+    await userCredential.user?.updateDisplayName(_nameController.text.trim());
+
+    // Create user document in Firestore
+    await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userCredential.user!.uid)
+        .set({
+      'email': _emailController.text.trim(),
+      'displayName': _nameController.text.trim(),
+      'phone': _phoneController.text.trim(),
+      'country': _countryController.text.trim(),
+      'walletBalance': 0.0,
+      'walletCurrency': 'USD',
+      'role': 'user',
+      'kycVerified': false,
+      'emailVerified': false,
+      'createdAt': FieldValue.serverTimestamp(),
+      'updatedAt': FieldValue.serverTimestamp(),
+      'referralCode': _generateReferralCode(),
+      'referredBy': '',
+    });
+
+    // ✅ Show verification message
+    if (mounted) {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => AlertDialog(
+          backgroundColor: const Color(0xFF1E3A5F),
+          title: const Text('Verify Your Email'),
+          content: const Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.email_outlined, size: 64, color: Color(0xFFF59E0B)),
+              SizedBox(height: 16),
+              Text(
+                'We sent a verification email to your inbox.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 16),
+              ),
+              SizedBox(height: 8),
+              Text(
+                'Please verify your email before logging in.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+              ),
+            ],
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.pushReplacementNamed(context, '/login');
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFF59E0B),
+                foregroundColor: const Color(0xFF0A1628),
+              ),
+              child: const Text('Go to Login'),
+            ),
+          ],
+        ),
+      );
+    }
+  } on FirebaseAuthException catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(e.message ?? 'Registration failed')),
+    );
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
+  }
+}
 
   String _generateReferralCode() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
