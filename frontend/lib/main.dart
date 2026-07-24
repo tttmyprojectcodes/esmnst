@@ -29,8 +29,8 @@ const String brandSlogan = 'Global Data eSIM';
 const String companyName = 'Tech Talk Titans';
 const String brandDisplay = '$brandName - $brandSlogan';
 const String brandFull = '$brandName | $brandSlogan\nA $companyName Product';
-const String supportEmail = 'support@esimnest.com';
-const String websiteUrl = 'www.esimnest.com';
+const String supportEmail = 'support@esimnest.online';
+const String websiteUrl = 'www.esimnest.online';
 
 // =====================================================
 // 2. MAIN APP
@@ -603,32 +603,80 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _loginWithGoogle() async {
-    setState(() => _isLoading = true);
-    try {
-      final GoogleSignIn googleSignIn = GoogleSignIn();
-      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-      if (googleUser == null) {
-        if (mounted) setState(() => _isLoading = false);
-        return;
+  setState(() => _isLoading = true);
+  try {
+    // ✅ For Web: Use the GoogleSignIn with proper configuration
+    final GoogleSignIn googleSignIn = GoogleSignIn();
+    
+    // ✅ Check if already signed in
+    final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+    if (googleUser == null) {
+      if (mounted) setState(() => _isLoading = false);
+      return; // User cancelled
+    }
+    
+    final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+    
+    // ✅ Ensure tokens are not null
+    if (googleAuth.accessToken == null || googleAuth.idToken == null) {
+      throw Exception('Failed to get authentication tokens');
+    }
+    
+    final credential = GoogleAuthProvider.credential(
+      accessToken: googleAuth.accessToken!,
+      idToken: googleAuth.idToken!,
+    );
+    
+    final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+    final User? user = userCredential.user;
+    
+    if (user != null) {
+      // ✅ Check if user document exists
+      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      
+      if (!doc.exists) {
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+          'email': user.email ?? '',
+          'displayName': user.displayName ?? 'User',
+          'phone': user.phoneNumber ?? '',
+          'country': '',
+          'walletBalance': 0.0,
+          'walletCurrency': 'USD',
+          'role': 'user',
+          'kycVerified': false,
+          'emailVerified': user.emailVerified ?? false,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'referralCode': _generateReferralCode(),
+          'referredBy': '',
+        });
       }
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        accessToken: googleAuth.accessToken,
-        idToken: googleAuth.idToken,
-      );
-      await FirebaseAuth.instance.signInWithCredential(credential);
+      
       if (mounted) {
         Navigator.pushReplacementNamed(context, '/home');
       }
-    } catch (e) {
+    }
+  } catch (e) {
+    print('Google login error: $e');
+    if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Google login failed: $e')),
       );
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
     }
+  } finally {
+    if (mounted) setState(() => _isLoading = false);
   }
+}
+
+// ✅ Add this helper method in _LoginScreenState
+String _generateReferralCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  return String.fromCharCodes(
+    List.generate(8, (_) => chars.codeUnitAt(
+      DateTime.now().millisecondsSinceEpoch % chars.length,
+    )),
+  );
+}
 
   @override
   Widget build(BuildContext context) {
@@ -936,6 +984,59 @@ class _RegisterScreenState extends State<RegisterScreen> {
       'referralCode': _generateReferralCode(),
       'referredBy': '',
     });
+    // ✅ Save phone number for verification
+final phoneNumber = _phoneController.text.trim();
+
+// ✅ Show phone verification dialog
+if (mounted) {
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => AlertDialog(
+      backgroundColor: const Color(0xFF1E3A5F),
+      title: const Text('Verify Phone Number'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.phone_android, size: 48, color: Color(0xFFF59E0B)),
+          const SizedBox(height: 16),
+          Text(
+            'We need to verify your phone number: +91 $phoneNumber',
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 14),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'We\'ll send a 6-digit OTP to verify.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+          ),
+        ],
+      ),
+      actions: [
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context);
+            // ✅ Navigate to phone verification
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => PhoneVerificationScreen(
+                  phoneNumber: '+91$phoneNumber',
+                ),
+              ),
+            );
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFFF59E0B),
+            foregroundColor: const Color(0xFF0A1628),
+          ),
+          child: const Text('Verify Now'),
+        ),
+      ],
+    ),
+  );
+}
 
     // ✅ Show verification message
     if (mounted) {
