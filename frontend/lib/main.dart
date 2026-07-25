@@ -605,70 +605,67 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _loginWithGoogle() async {
-  setState(() => _isLoading = true);
-  try {
-    // ✅ For Web: Use the GoogleSignIn with proper configuration
-    final GoogleSignIn googleSignIn = GoogleSignIn();
+    setState(() => _isLoading = true);
+    try {
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
     
-    // ✅ Check if already signed in
-    final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-    if (googleUser == null) {
-      if (mounted) setState(() => _isLoading = false);
-      return; // User cancelled
-    }
-    
-    final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-    
-    // ✅ Ensure tokens are not null
-    if (googleAuth.accessToken == null || googleAuth.idToken == null) {
-      throw Exception('Failed to get authentication tokens');
-    }
-    
-    final credential = GoogleAuthProvider.credential(
-      accessToken: googleAuth.accessToken!,
-      idToken: googleAuth.idToken!,
-    );
-    
-    final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
-    final User? user = userCredential.user;
-    
-    if (user != null) {
-      // ✅ Check if user document exists
-      final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
-      
-      if (!doc.exists) {
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
-          'email': user.email ?? '',
-          'displayName': user.displayName ?? 'User',
-          'phone': user.phoneNumber ?? '',
-          'country': '',
-          'walletBalance': 0.0,
-          'walletCurrency': 'USD',
-          'role': 'user',
-          'kycVerified': false,
-          'emailVerified': user.emailVerified ?? false,
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-          'referralCode': _generateReferralCode(),
-          'referredBy': '',
-        });
+      if (googleUser == null) {
+        if (mounted) setState(() => _isLoading = false);
+        return; // User cancelled
       }
-      
-      if (mounted) {
-        Navigator.pushReplacementNamed(context, '/home');
+    
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+    
+      // ✅ Check if tokens are null
+      if (googleAuth.idToken == null) {
+        throw Exception('Failed to get Google ID token');
       }
-    }
-  } catch (e) {
-    print('Google login error: $e');
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Google login failed: $e')),
+    
+      final credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken!,  // ✅ Use ! only after null check
       );
-    }
-  } finally {
-    if (mounted) setState(() => _isLoading = false);
+    
+      final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+      final User? user = userCredential.user;
+    
+      if (user != null) {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+      
+        if (!doc.exists) {
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+            'email': user.email ?? '',
+            'displayName': user.displayName ?? 'User',
+            'phone': user.phoneNumber ?? '',
+            'country': '',
+            'walletBalance': 0.0,
+            'walletCurrency': 'USD',
+            'role': 'user',
+            'kycVerified': false,
+            'emailVerified': user.emailVerified ?? false,
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+            'referralCode': _generateReferralCode(),
+            'referredBy': '',
+          });
+        }
+      
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, '/home');
+        }
+      }
+    } catch (e) {
+      print('Google login error: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Google login failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }  
   }
-}
 
 // ✅ Add this helper method in _LoginScreenState
 String _generateReferralCode() {
