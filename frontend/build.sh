@@ -6,17 +6,17 @@ cd /tmp
 git clone --depth 1 https://github.com/flutter/flutter.git -b stable
 export PATH="/tmp/flutter/bin:$PATH"
 
-# ✅ Find frontend directory (works on Render AND Netlify)
+# ✅ Navigate to the actual project directory
+cd /opt/build/repo
+
 echo "📁 Current directory: $(pwd)"
 echo "📁 Listing files:"
 ls -la
 
-# Try to find the frontend directory
+# ✅ Find frontend directory
 if [ -d "frontend" ]; then
     echo "✅ Found frontend directory, navigating..."
     cd frontend
-elif [ -d "." ] && [ -f "pubspec.yaml" ]; then
-    echo "✅ Already in frontend directory"
 else
     echo "❌ Could not find frontend directory"
     exit 1
