@@ -2,9 +2,7 @@
   base = "."
   publish = "frontend/build/web"
   command = """
-    cd frontend
-    chmod +x build.sh
-    ./build.sh
+    ./frontend/build.sh
   """
 
 [build.environment]
