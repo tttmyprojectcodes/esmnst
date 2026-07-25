@@ -2,6 +2,7 @@
   base = "."
   publish = "frontend/build/web"
   command = """
+    chmod +x frontend/build.sh
     ./frontend/build.sh
   """
 
