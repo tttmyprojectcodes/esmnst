@@ -6,13 +6,26 @@ cd /tmp
 git clone --depth 1 https://github.com/flutter/flutter.git -b stable
 export PATH="/tmp/flutter/bin:$PATH"
 
-# Navigate back to frontend directory
-cd /opt/render/project/src/frontend
+# ✅ Find frontend directory (works on Render AND Netlify)
+echo "📁 Current directory: $(pwd)"
+echo "📁 Listing files:"
+ls -la
 
-echo "Getting dependencies..."
+# Try to find the frontend directory
+if [ -d "frontend" ]; then
+    echo "✅ Found frontend directory, navigating..."
+    cd frontend
+elif [ -d "." ] && [ -f "pubspec.yaml" ]; then
+    echo "✅ Already in frontend directory"
+else
+    echo "❌ Could not find frontend directory"
+    exit 1
+fi
+
+echo "📦 Getting dependencies..."
 flutter pub get
 
-echo "Building web app with environment variables..."
+echo "🌐 Building web app with environment variables..."
 flutter build web --release \
   --dart-define=API_URL="$API_URL" \
   --dart-define=FIREBASE_API_KEY="$FIREBASE_API_KEY" \
@@ -22,19 +35,13 @@ flutter build web --release \
   --dart-define=FIREBASE_MESSAGING_SENDER_ID="$FIREBASE_MESSAGING_SENDER_ID" \
   --dart-define=FIREBASE_APP_ID="$FIREBASE_APP_ID"
 
-# ✅ Explicitly copy assets to build/web
-echo "Copying assets to build/web..."
+# ✅ Copy assets to build/web
+echo "📁 Copying assets to build/web..."
 mkdir -p build/web/assets/images
 cp -r assets/images/* build/web/assets/images/ 2>/dev/null || true
-
-# Also copy from parent assets if it exists
-if [ -d "../assets/images" ]; then
-    echo "Copying assets from parent folder..."
-    cp -r ../assets/images/* build/web/assets/images/ 2>/dev/null || true
-fi
 
 # Verify assets were copied
 echo "Assets in build/web/assets/images:"
 ls -la build/web/assets/images/ || echo "No assets found!"
 
-echo "Build complete! Files are in build/web"
+echo "✅ Build complete! Files are in build/web"
