@@ -20,6 +20,7 @@ import 'dart:html' as html;
 import 'services/razorpay_service.dart';
 import 'data/legal_content.dart';
 import 'screens/phone_verification.dart';
+import 'screens/verify_otp_screen.dart';
 
 // =====================================================
 // 1. BRAND CONSTANTS
@@ -954,150 +955,29 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   setState(() => _isLoading = true);
   try {
-    final userCredential = await FirebaseAuth.instance
-        .createUserWithEmailAndPassword(
-      email: _emailController.text.trim(),
-      password: _passwordController.text.trim(),
-    );
-
-    // ✅ Send email verification
-    await userCredential.user?.sendEmailVerification();
-    
-    // Update display name
-    await userCredential.user?.updateDisplayName(_nameController.text.trim());
-
-    // Create user document in Firestore
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(userCredential.user!.uid)
-        .set({
-      'email': _emailController.text.trim(),
-      'displayName': _nameController.text.trim(),
-      'phone': _phoneController.text.trim(),
-      'country': _countryController.text.trim(),
-      'walletBalance': 0.0,
-      'walletCurrency': 'USD',
-      'role': 'user',
-      'kycVerified': false,
-      'emailVerified': false,
-      'createdAt': FieldValue.serverTimestamp(),
-      'updatedAt': FieldValue.serverTimestamp(),
-      'referralCode': _generateReferralCode(),
-      'referredBy': '',
-    });
-    // ✅ Save phone number for verification
-final phoneNumber = _phoneController.text.trim();
-
-// ✅ Show phone verification dialog
-if (mounted) {
-  showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (context) => AlertDialog(
-      backgroundColor: const Color(0xFF1E3A5F),
-      title: const Text('Verify Phone Number'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          const Icon(Icons.phone_android, size: 48, color: Color(0xFFF59E0B)),
-          const SizedBox(height: 16),
-          Text(
-            'We need to verify your phone number: +91 $phoneNumber',
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 14),
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'We\'ll send a 6-digit OTP to verify.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-          ),
-        ],
-      ),
-      actions: [
-        ElevatedButton(
-          onPressed: () {
-            Navigator.pop(context);
-            // ✅ Navigate to phone verification
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => PhoneVerificationScreen(
-                  phoneNumber: '+91$phoneNumber',
-                ),
-              ),
-            );
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFFF59E0B),
-            foregroundColor: const Color(0xFF0A1628),
-          ),
-          child: const Text('Verify Now'),
-        ),
-      ],
-    ),
-  );
-}
-
-    // ✅ Show verification message
+    // ✅ Navigate to OTP verification (DON'T create account yet)
     if (mounted) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (context) => AlertDialog(
-          backgroundColor: const Color(0xFF1E3A5F),
-          title: const Text('Verify Your Email'),
-          content: const Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.email_outlined, size: 64, color: Color(0xFFF59E0B)),
-              SizedBox(height: 16),
-              Text(
-                'We sent a verification email to your inbox.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16),
-              ),
-              SizedBox(height: 8),
-              Text(
-                'Please verify your email before logging in.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
-              ),
-            ],
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VerifyOTPScreen(
+            email: _emailController.text.trim(),
+            phone: _phoneController.text.trim(),
+            password: _passwordController.text.trim(),
+            displayName: _nameController.text.trim(),
+            country: _countryController.text.trim(),
           ),
-          actions: [
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                Navigator.pushReplacementNamed(context, '/login');
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFFF59E0B),
-                foregroundColor: const Color(0xFF0A1628),
-              ),
-              child: const Text('Go to Login'),
-            ),
-          ],
         ),
       );
     }
-  } on FirebaseAuthException catch (e) {
+    setState(() => _isLoading = false);
+  } catch (e) {
+    setState(() => _isLoading = false);
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(e.message ?? 'Registration failed')),
+      SnackBar(content: Text('Error: $e')),
     );
-  } finally {
-    if (mounted) setState(() => _isLoading = false);
   }
 }
-
-  String _generateReferralCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    return String.fromCharCodes(
-      List.generate(8, (_) => chars.codeUnitAt(
-        DateTime.now().millisecondsSinceEpoch % chars.length,
-      )),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
