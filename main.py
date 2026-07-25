@@ -38,7 +38,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://esmnst-frontend.onrender.com",  # Your frontend's exact URL
+        "https://eclectic-biscochitos-61a8f9.netlify.app/",  # Your frontend's exact URL
         "https://esmnst.onrender.com",           # Your backend URL for testing
         "http://localhost:3000",                 # For local development
         "https://www.esimnest.online",
