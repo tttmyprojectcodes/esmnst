@@ -4,8 +4,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PhoneVerificationScreen extends StatefulWidget {
   final String? phoneNumber;
+  final String? email;
+  final String? password;
+  final String? displayName;
+  final String? country;
   
-  const PhoneVerificationScreen({super.key, this.phoneNumber});
+  const PhoneVerificationScreen({
+    super.key, 
+    this.phoneNumber,
+    this.email,
+    this.password,
+    this.displayName,
+    this.country,
+  });
 
   @override
   State<PhoneVerificationScreen> createState() => _PhoneVerificationScreenState();
@@ -62,8 +73,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
         verificationCompleted: (PhoneAuthCredential credential) async {
           await FirebaseAuth.instance.signInWithCredential(credential);
           if (mounted) {
-            _updateUserPhone();
-            Navigator.pushReplacementNamed(context, '/home');
+            _createAccount();
           }
         },
         verificationFailed: (FirebaseAuthException e) {
@@ -113,9 +123,8 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
         smsCode: _otpController.text.trim(),
       );
       await FirebaseAuth.instance.signInWithCredential(credential);
-      _updateUserPhone();
       if (mounted) {
-        Navigator.pushReplacementNamed(context, '/home');
+        _createAccount();
       }
     } catch (e) {
       setState(() => _isLoading = false);
@@ -125,15 +134,66 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
     }
   }
 
-  Future<void> _updateUserPhone() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      await FirebaseFirestore.instance.collection('users').doc(user.uid).update({
-        'phone': _phoneNumber.replaceAll('+91', ''),
+  Future<void> _createAccount() async {
+    setState(() => _isLoading = true);
+    try {
+      // ✅ Now create the Firebase account
+      final userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+        email: widget.email!,
+        password: widget.password!,
+      );
+
+      await userCredential.user?.updateDisplayName(widget.displayName);
+
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .set({
+        'email': widget.email,
+        'displayName': widget.displayName,
+        'phone': widget.phoneNumber?.replaceAll('+91', '') ?? '',
+        'country': widget.country ?? '',
+        'walletBalance': 0.0,
+        'walletCurrency': 'USD',
+        'role': 'user',
+        'kycVerified': false,
+        'emailVerified': false,
         'phoneVerified': true,
+        'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
+        'referralCode': _generateReferralCode(),
+        'referredBy': '',
       });
+
+      setState(() => _isLoading = false);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🎉 Account created successfully!'),
+            backgroundColor: Color(0xFF10B981),
+          ),
+        );
+        Navigator.pushReplacementNamed(context, '/home');
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Registration failed: $e')),
+        );
+      }
     }
+  }
+
+  String _generateReferralCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    return String.fromCharCodes(
+      List.generate(8, (_) => chars.codeUnitAt(
+        DateTime.now().millisecondsSinceEpoch % chars.length,
+      )),
+    );
   }
 
   @override
@@ -143,7 +203,7 @@ class _PhoneVerificationScreenState extends State<PhoneVerificationScreen> {
         title: const Text('Verify Phone Number'),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pushReplacementNamed(context, '/home'),
+          onPressed: () => Navigator.pop(context),
         ),
       ),
       body: Padding(
