@@ -235,6 +235,29 @@ async def debug():
 # REST OF YOUR CODE BELOW...
 # =====================================================
 
+@app.post("/api/send-otp-email")
+async def send_otp_email(request: Request):
+    try:
+        data = await request.json()
+        email = data.get('email')
+        otp = data.get('otp')
+        
+        send_email_trigger(
+            to=email,
+            subject="Your eSIMNest OTP Code",
+            html=f"""
+            <h2>Your OTP Code</h2>
+            <p>Your verification OTP is: <strong>{otp}</strong></p>
+            <p>This OTP expires in 5 minutes.</p>
+            <p>If you didn't request this, please ignore.</p>
+            """
+        )
+        
+        return {"success": True}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
 @app.post("/api/payment/paypal/create-order")
 async def create_paypal_order(request: dict, user: dict = Depends(get_current_user)):
     try:
