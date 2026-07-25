@@ -103,18 +103,55 @@ class _VerifyOTPScreenState extends State<VerifyOTPScreen> {
   Future<void> _sendPhoneOTP() async {
     setState(() => _isLoading = true);
     try {
-      // ✅ Ensure phone number is in correct format
       String phoneNumber = widget.phone;
       if (!phoneNumber.startsWith('+')) {
-        phoneNumber = '+91$phoneNumber';  // Default to India
+        phoneNumber = '+91$phoneNumber';
       }
     
       await FirebaseAuth.instance.verifyPhoneNumber(
         phoneNumber: phoneNumber,
-        // ... rest of code
+        verificationCompleted: (PhoneAuthCredential credential) async {
+          await FirebaseAuth.instance.signInWithCredential(credential);
+          setState(() {
+            _phoneOtpVerified = true;
+            _isLoading = false;
+          });
+          _checkAndCompleteRegistration();
+        },
+        verificationFailed: (FirebaseAuthException e) {
+          setState(() => _isLoading = false);
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Phone verification failed: ${e.message}')),
+            );
+          }
+        },
+        codeSent: (String verificationId, int? resendToken) {
+          setState(() {
+            _phoneOtpSent = true;
+            _isLoading = false;
+            _startTimer();
+          });
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('📱 OTP sent to your phone!'),
+                backgroundColor: Color(0xFF10B981),
+              ),
+            );
+          }
+        },
+        codeAutoRetrievalTimeout: (String verificationId) {
+          setState(() => _isLoading = false);
+        },
       );
     } catch (e) {
-      // ... error handling
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to send phone OTP: $e')),
+        );
+      }
     }
   }
 
@@ -175,16 +212,35 @@ class _VerifyOTPScreenState extends State<VerifyOTPScreen> {
   }
 
   Future<void> _verifyPhoneOTP() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      setState(() {
-        _phoneOtpVerified = true;
-      });
-      _checkAndCompleteRegistration();
-    } else {
+    if (_phoneOtpController.text.length < 6) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please verify your phone OTP first')),
+        const SnackBar(content: Text('Enter the 6-digit phone OTP')),
       );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      // The phone verification is handled by Firebase
+      // The user is already signed in via _sendPhoneOTP
+      // So we just check if user is signed in
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        setState(() {
+          _phoneOtpVerified = true;
+          _isLoading = false;
+        });
+        _checkAndCompleteRegistration();
+      } else {
+        throw Exception('Phone verification failed. Please try again.');
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Phone verification error: $e')),
+        );
+      }
     }
   }
 
