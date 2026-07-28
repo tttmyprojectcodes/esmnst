@@ -13,7 +13,6 @@ import firebase_admin
 from firebase_admin import credentials, firestore, auth
 import requests
 import json
-import os
 from datetime import datetime, timedelta
 import secrets
 import hashlib
@@ -39,9 +38,9 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "https://eclectic-biscochitos-61a8f9.netlify.app/",  # Your frontend's exact URL
-        "https://esmnst.onrender.com",           # Your backend URL for testing
-        "http://localhost:3000",                 # For local development
+        "https://eclectic-biscochitos-61a8f9.netlify.app/",  
+        "https://esimnest.onrender.com",           
+        "http://localhost:3000",                
         "https://www.esimnest.online",
         "https://esimnest.online",
     ],
