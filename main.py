@@ -294,9 +294,9 @@ async def debug():
 # =====================================================
 
 @app.post("/api/send-otp-email")
-async def send_otp_email(request: Request):
+async def send_otp_email(request_data: dict):
     try:
-        data = await request.json()
+        data = request_data
         email = data.get('email')
         otp = data.get('otp')
         
