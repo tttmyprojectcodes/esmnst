@@ -950,23 +950,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return;
   }
 
-  setState(() => _isLoading = true);
-  try {
-    // ✅ Navigate to OTP verification (DON'T create account yet)
-    if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => VerifyOTPScreen(
-            email: _emailController.text.trim(),
-            phone: _phoneController.text.trim(),
-            password: _passwordController.text.trim(),
-            displayName: _nameController.text.trim(),
-            country: _countryController.text.trim(),
-          ),
-        ),
-      );
-    }
+  // ✅ Navigate to OTP verification screen
+  Navigator.push(
+    context,
+    MaterialPageRoute(
+      builder: (context) => VerifyOTPScreen(
+        email: _emailController.text.trim(),
+        password: _passwordController.text.trim(),
+        displayName: _nameController.text.trim(),
+        phone: _phoneController.text.trim(),
+        country: _countryController.text.trim(),
+      ),
+    ),
+  );
+}
     setState(() => _isLoading = false);
   } catch (e) {
     setState(() => _isLoading = false);
