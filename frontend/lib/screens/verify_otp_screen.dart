@@ -102,7 +102,7 @@ class _VerifyOTPScreenState extends State<VerifyOTPScreen> {
   Future<void> _sendEmailOTP(String email, String otp) async {
     try {
       final response = await http.post(
-        Uri.parse('https://esmnst.onrender.com/api/send-otp-email'),
+        Uri.parse('https://esimnest.onrender.com/api/send-otp-email'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'email': email,
