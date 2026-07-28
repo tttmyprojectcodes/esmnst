@@ -97,6 +97,37 @@ else:
         razorpay_client = None
 
 # =====================================================
+# SMTP EMAIL CONFIGURATION
+# =====================================================
+
+SMTP_HOST = os.getenv('SMTP_HOST', 'smtp.gmail.com')
+SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
+SMTP_USER = os.getenv('SMTP_USER')
+SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
+SMTP_FROM = os.getenv('SMTP_FROM', SMTP_USER)
+
+def send_email_direct(to: str, subject: str, html: str):
+    """Send email directly using SMTP"""
+    try:
+        msg = MIMEMultipart('alternative')
+        msg['Subject'] = subject
+        msg['From'] = SMTP_FROM
+        msg['To'] = to
+        
+        html_part = MIMEText(html, 'html')
+        msg.attach(html_part)
+        
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.send_message(msg)
+        print(f"✅ Email sent to {to}")
+        return True
+    except Exception as e:
+        print(f"❌ Email error: {e}")
+        return False
+
+# =====================================================
 # 4. eSIM ACCESS AUTHENTICATION (UPDATED)
 # =====================================================
 
@@ -242,14 +273,20 @@ async def send_otp_email(request: Request):
         email = data.get('email')
         otp = data.get('otp')
         
-        send_email_trigger(
+        send_email_direct(
             to=email,
             subject="Your eSIMNest OTP Code",
             html=f"""
-            <h2>Your OTP Code</h2>
-            <p>Your verification OTP is: <strong>{otp}</strong></p>
-            <p>This OTP expires in 5 minutes.</p>
-            <p>If you didn't request this, please ignore.</p>
+            <html>
+            <body style="font-family: Arial, sans-serif; background: #0A1628; color: white; padding: 20px;">
+                <h2 style="color: #F59E0B;">🔐 Your OTP Code</h2>
+                <p>Your verification OTP is: <strong style="font-size: 28px; color: #F59E0B;">{otp}</strong></p>
+                <p>This OTP expires in <strong>5 minutes</strong>.</p>
+                <hr style="border-color: #333;">
+                <p style="color: #666; font-size: 12px;">If you didn't request this, please ignore.</p>
+                <p style="color: #666; font-size: 12px;">— eSIMNest Team</p>
+            </body>
+            </html>
             """
         )
         
@@ -589,7 +626,7 @@ async def register_user(user_data: UserRegister):
         
         create_user_document(user.uid, user_data.dict())
         
-        send_email_trigger(
+        send_email_direct(
             to=user_data.email,
             subject="Welcome to eSIMNest! 🎉",
             html=welcome_email_template(user_data.displayName)
@@ -815,7 +852,7 @@ async def verify_payment(payment_data: dict, user: dict = Depends(get_current_us
         user_email = user_doc.to_dict().get('email')
         user_name = user_doc.to_dict().get('displayName', '')
         
-        send_email_trigger(
+        send_email_direct(
             to=user_email,
             subject="Payment Received ✅",
             html=payment_confirmation_email(user_name, amount, payment_method)
@@ -1342,7 +1379,7 @@ async def esim_webhook(request: Request):
                                 
                                 # Send email with QR code
                                 if user_email:
-                                    send_email_trigger(
+                                    send_email_direct(
                                         to=user_email,
                                         subject=f"Your eSIM is Ready! 📱",
                                         html=esim_delivery_email(
@@ -1491,26 +1528,6 @@ async def verify_manual_payment(data: dict, user: dict = Depends(get_current_use
         raise HTTPException(status_code=400, detail=str(e))
 
 # =====================================================
-# 13. EMAIL FUNCTIONS (Firestore Trigger)
-# =====================================================
-
-def send_email_trigger(to: str, subject: str, html: str):
-    try:
-        db.collection('mail').add({
-            'to': [to],
-            'message': {
-                'subject': subject,
-                'html': html
-            },
-            'createdAt': firestore.SERVER_TIMESTAMP
-        })
-        print(f"✅ Email trigger added for {to}")
-        return True
-    except Exception as e:
-        print(f"❌ Error adding email trigger: {e}")
-        return False
-
-# =====================================================
 # 14. EMAIL TEMPLATES
 # =====================================================
 
@@ -1548,7 +1565,7 @@ def welcome_email_template(name: str):
             </div>
             <div class="footer">
                 <div>© 2026 eSIMNest. A Tech Talk Titans Product</div>
-                <div>support@esimnest.com | www.esimnest.com</div>
+                <div>support@esimnest.online | www.esimnest.online</div>
             </div>
         </div>
     </body>
@@ -1589,7 +1606,7 @@ def payment_confirmation_email(name: str, amount: float, method: str):
             </div>
             <div class="footer">
                 <div>© 2026 eSIMNest. A Tech Talk Titans Product</div>
-                <div>support@esimnest.com | www.esimnest.com</div>
+                <div>support@esimnest.online | www.esimnest.online</div>
             </div>
         </div>
     </body>
@@ -1658,7 +1675,7 @@ def esim_delivery_email(name: str, country: str, plan: str, qr_code: str, activa
             </div>
             <div class="footer">
                 <div>© 2026 eSIMNest. A Tech Talk Titans Product</div>
-                <div>support@esimnest.com | www.esimnest.com</div>
+                <div>support@esimnest.online | www.esimnest.online</div>
             </div>
         </div>
     </body>
