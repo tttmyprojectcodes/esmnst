@@ -334,12 +334,42 @@ class MyApp extends StatelessWidget {
         if (snapshot.hasData) {
           final user = snapshot.data!;
           
-          // ✅ Check if email is verified (for email/password users)
-          if (!user.emailVerified && user.email != null && user.providerData.first.providerId == 'password') {
-            return const EmailVerificationScreen();
-          }
-          
-          return const MainScreen();
+          // ✅ Check if email is verified in Firestore
+          return FutureBuilder<DocumentSnapshot>(
+            future: FirebaseFirestore.instance
+                .collection('users')
+                .doc(user.uid)
+                .get(),
+            builder: (context, userSnapshot) {
+              if (userSnapshot.connectionState == ConnectionState.waiting) {
+                return const SplashScreen();
+              }
+              
+              if (userSnapshot.hasData && userSnapshot.data!.exists) {
+                final userData = userSnapshot.data!.data() as Map<String, dynamic>;
+                final isEmailVerified = userData['emailVerified'] ?? false;
+                
+                if (!isEmailVerified) {
+                  // ✅ Email not verified - sign out and show message
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    FirebaseAuth.instance.signOut();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please verify your email first. Check your inbox.'),
+                        backgroundColor: Color(0xFFEF4444),
+                        duration: Duration(seconds: 5),
+                      ),
+                    );
+                  });
+                  return const LoginScreen();
+                }
+                
+                return const MainScreen();
+              }
+              
+              return const LoginScreen();
+            },
+          );
         }
         return const LoginScreen();
       },
