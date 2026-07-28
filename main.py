@@ -97,81 +97,62 @@ else:
         razorpay_client = None
 
 # =====================================================
-# GMAIL API CONFIGURATION
+# GMAIL API - ENVIRONMENT VARIABLES VERSION
 # =====================================================
 
 import os
 import base64
+import pickle
+import io
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from google.oauth2.credentials import Credentials
-from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request as GoogleAuthRequest
 from googleapiclient.discovery import build
-import pickle
 
-# Gmail API scopes - only need send permission
-SCOPES = ['https://www.googleapis.com/auth/gmail.send']
+# Get token from environment variable
+GMAIL_TOKEN_BASE64 = os.getenv('GMAIL_TOKEN_BASE64')
 
-def get_gmail_service():
-    """Get authenticated Gmail API service"""
-    creds = None
-    
-    # Token file stores user's access and refresh tokens
-    if os.path.exists('token.pickle'):
-        with open('token.pickle', 'rb') as token:
-            creds = pickle.load(token)
-    
-    # If there are no (valid) credentials available, let the user log in.
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(GoogleAuthRequest())
-        else:
-            # For production, you need to handle this differently
-            # You can use service account or store refresh token
-            flow = InstalledAppFlow.from_client_secrets_file(
-                'credentials.json', SCOPES)
-            creds = flow.run_local_server(port=0)
-        
-        # Save credentials for next run
-        with open('token.pickle', 'wb') as token:
-            pickle.dump(creds, token)
-    
-    return build('gmail', 'v1', credentials=creds)
-
-def send_email_gmail_api(to: str, subject: str, html: str):
-    """Send email using Gmail API"""
+def send_email_direct(to: str, subject: str, html: str):
+    """Send email using Gmail API from environment variable"""
     try:
-        service = get_gmail_service()
+        if not GMAIL_TOKEN_BASE64:
+            print("❌ GMAIL_TOKEN_BASE64 not set in environment")
+            return False
         
-        # Create email message
+        print(f"📧 Sending email to: {to}")
+        
+        # Decode token from environment variable
+        token_bytes = base64.b64decode(GMAIL_TOKEN_BASE64)
+        creds = pickle.load(io.BytesIO(token_bytes))
+        
+        # Refresh if expired
+        if creds.expired and creds.refresh_token:
+            print("🔄 Refreshing token...")
+            creds.refresh(GoogleAuthRequest())
+        
+        # Build Gmail service
+        service = build('gmail', 'v1', credentials=creds)
+        
+        # Create email
         message = MIMEMultipart('alternative')
         message['to'] = to
         message['subject'] = subject
+        message.attach(MIMEText(html, 'html'))
         
-        # Attach HTML content
-        html_part = MIMEText(html, 'html')
-        message.attach(html_part)
-        
-        # Encode message
+        # Encode and send
         raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-        
-        # Send email
         service.users().messages().send(
             userId='me',
             body={'raw': raw}
         ).execute()
         
-        print(f"✅ Email sent to {to} via Gmail API")
+        print(f"✅ Email sent to {to}")
         return True
         
     except Exception as e:
-        print(f"❌ Gmail API error: {e}")
+        print(f"❌ Email error: {e}")
         return False
-
-# Alias for compatibility with existing code
-send_email_direct = send_email_gmail_api
-
 # =====================================================
 # 4. eSIM ACCESS AUTHENTICATION (UPDATED)
 # =====================================================
