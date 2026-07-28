@@ -97,60 +97,45 @@ else:
         razorpay_client = None
 
 # =====================================================
-# GMAIL API - WORKING VERSION
+# GMAIL API - SIMPLE VERSION
 # =====================================================
 
 import os
 import base64
-import pickle
-import io
-import json
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
+import pickle
+import io
 
-# Get token from environment
 GMAIL_TOKEN_BASE64 = os.getenv('GMAIL_TOKEN_BASE64')
 
-def send_email_direct(to: str, subject: str, html: str):
-    """Send email using Gmail API"""
+def send_email_direct(to, subject, html):
     try:
         if not GMAIL_TOKEN_BASE64:
             print("❌ GMAIL_TOKEN_BASE64 not set")
             return False
         
-        print(f"📧 Sending email to: {to}")
-        
-        # Decode and load credentials
         token_bytes = base64.b64decode(GMAIL_TOKEN_BASE64)
         creds = pickle.load(io.BytesIO(token_bytes))
         
-        # Refresh if expired
         if creds.expired and creds.refresh_token:
-            print("🔄 Refreshing token...")
             creds.refresh(Request())
         
-        # Build service
         service = build('gmail', 'v1', credentials=creds)
         
-        # Create email
         message = MIMEMultipart('alternative')
         message['to'] = to
         message['subject'] = subject
         message.attach(MIMEText(html, 'html'))
         
-        # Send
         raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
-        service.users().messages().send(
-            userId='me',
-            body={'raw': raw}
-        ).execute()
+        service.users().messages().send(userId='me', body={'raw': raw}).execute()
         
         print(f"✅ Email sent to {to}")
         return True
-        
     except Exception as e:
         print(f"❌ Email error: {e}")
         return False
