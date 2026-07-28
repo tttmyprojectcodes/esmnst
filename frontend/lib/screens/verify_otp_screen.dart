@@ -7,17 +7,17 @@ import 'dart:math';
 
 class VerifyOTPScreen extends StatefulWidget {
   final String email;
-  final String phone;
   final String password;
   final String displayName;
+  final String phone;
   final String country;
 
   const VerifyOTPScreen({
     super.key,
     required this.email,
-    required this.phone,
     required this.password,
     required this.displayName,
+    required this.phone,
     required this.country,
   });
 
@@ -26,22 +26,18 @@ class VerifyOTPScreen extends StatefulWidget {
 }
 
 class _VerifyOTPScreenState extends State<VerifyOTPScreen> {
-  final TextEditingController _emailOtpController = TextEditingController();
-  final TextEditingController _phoneOtpController = TextEditingController();
+  final TextEditingController _otpController = TextEditingController();
   bool _isLoading = false;
-  bool _emailOtpSent = false;
-  bool _emailOtpVerified = false;
-  bool _phoneOtpSent = false;
-  bool _phoneOtpVerified = false;
-  String _emailOtp = '';
+  bool _otpSent = false;
+  bool _otpVerified = false;
+  String _generatedOtp = '';
   int _resendTimer = 30;
   bool _canResend = false;
 
   @override
   void initState() {
     super.initState();
-    _sendEmailOTP();
-    _sendPhoneOTP();
+    _sendOTP();
     _startTimer();
   }
 
@@ -62,23 +58,26 @@ class _VerifyOTPScreenState extends State<VerifyOTPScreen> {
     });
   }
 
-  Future<void> _sendEmailOTP() async {
+  Future<void> _sendOTP() async {
     setState(() => _isLoading = true);
     try {
-      _emailOtp = (100000 + Random().nextInt(900000)).toString();
+      // Generate 6-digit OTP
+      _generatedOtp = (100000 + Random().nextInt(900000)).toString();
       
+      // Send OTP via your backend
+      await _sendEmailOTP(widget.email, _generatedOtp);
+      
+      // Store OTP in Firestore with expiry
       await FirebaseFirestore.instance.collection('otps').doc(widget.email).set({
         'email': widget.email,
-        'otp': _emailOtp,
-        'type': 'email',
+        'otp': _generatedOtp,
         'createdAt': FieldValue.serverTimestamp(),
         'expiresAt': DateTime.now().add(const Duration(minutes: 5)),
+        'verified': false,
       });
-
-      await _sendEmailViaBackend(widget.email, _emailOtp);
       
       setState(() {
-        _emailOtpSent = true;
+        _otpSent = true;
         _isLoading = false;
       });
       
@@ -94,220 +93,13 @@ class _VerifyOTPScreenState extends State<VerifyOTPScreen> {
       setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send email OTP: $e')),
+          SnackBar(content: Text('Failed to send OTP: $e')),
         );
       }
     }
   }
 
-  Future<void> _sendPhoneOTP() async {
-    setState(() => _isLoading = true);
-    try {
-      String phoneNumber = widget.phone;
-      if (!phoneNumber.startsWith('+')) {
-        phoneNumber = '+91$phoneNumber';
-      }
-    
-      await FirebaseAuth.instance.verifyPhoneNumber(
-        phoneNumber: phoneNumber,
-        verificationCompleted: (PhoneAuthCredential credential) async {
-          await FirebaseAuth.instance.signInWithCredential(credential);
-          setState(() {
-            _phoneOtpVerified = true;
-            _isLoading = false;
-          });
-          _checkAndCompleteRegistration();
-        },
-        verificationFailed: (FirebaseAuthException e) {
-          setState(() => _isLoading = false);
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Phone verification failed: ${e.message}')),
-            );
-          }
-        },
-        codeSent: (String verificationId, int? resendToken) {
-          setState(() {
-            _phoneOtpSent = true;
-            _isLoading = false;
-            _startTimer();
-          });
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('📱 OTP sent to your phone!'),
-                backgroundColor: Color(0xFF10B981),
-              ),
-            );
-          }
-        },
-        codeAutoRetrievalTimeout: (String verificationId) {
-          setState(() => _isLoading = false);
-        },
-      );
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to send phone OTP: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _verifyEmailOTP() async {
-    if (_emailOtpController.text.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter the 6-digit email OTP')),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    try {
-      final doc = await FirebaseFirestore.instance
-          .collection('otps')
-          .doc(widget.email)
-          .get();
-      
-      if (!doc.exists) {
-        throw Exception('OTP not found. Please resend.');
-      }
-      
-      final data = doc.data()!;
-      final storedOtp = data['otp'];
-      final expiresAt = data['expiresAt']?.toDate();
-      
-      if (expiresAt != null && expiresAt.isBefore(DateTime.now())) {
-        throw Exception('OTP expired. Please resend.');
-      }
-      
-      if (storedOtp == _emailOtpController.text.trim()) {
-        setState(() {
-          _emailOtpVerified = true;
-          _isLoading = false;
-        });
-        await FirebaseFirestore.instance.collection('otps').doc(widget.email).delete();
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('✅ Email verified!'),
-              backgroundColor: Color(0xFF10B981),
-            ),
-          );
-        }
-        _checkAndCompleteRegistration();
-      } else {
-        throw Exception('Invalid OTP. Please try again.');
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _verifyPhoneOTP() async {
-    if (_phoneOtpController.text.length < 6) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Enter the 6-digit phone OTP')),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-    try {
-      // The phone verification is handled by Firebase
-      // The user is already signed in via _sendPhoneOTP
-      // So we just check if user is signed in
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        setState(() {
-          _phoneOtpVerified = true;
-          _isLoading = false;
-        });
-        _checkAndCompleteRegistration();
-      } else {
-        throw Exception('Phone verification failed. Please try again.');
-      }
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Phone verification error: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _checkAndCompleteRegistration() async {
-    if (_emailOtpVerified && _phoneOtpVerified) {
-      setState(() => _isLoading = true);
-      try {
-        final userCredential = await FirebaseAuth.instance
-            .createUserWithEmailAndPassword(
-          email: widget.email,
-          password: widget.password,
-        );
-
-        await userCredential.user?.updateDisplayName(widget.displayName);
-
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(userCredential.user!.uid)
-            .set({
-          'email': widget.email,
-          'displayName': widget.displayName,
-          'phone': widget.phone,
-          'country': widget.country,
-          'walletBalance': 0.0,
-          'walletCurrency': 'USD',
-          'role': 'user',
-          'kycVerified': false,
-          'emailVerified': true,
-          'phoneVerified': true,
-          'createdAt': FieldValue.serverTimestamp(),
-          'updatedAt': FieldValue.serverTimestamp(),
-          'referralCode': _generateReferralCode(),
-          'referredBy': '',
-        });
-
-        setState(() => _isLoading = false);
-        
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('🎉 Account created successfully!'),
-              backgroundColor: Color(0xFF10B981),
-            ),
-          );
-          Navigator.pushReplacementNamed(context, '/home');
-        }
-      } catch (e) {
-        setState(() => _isLoading = false);
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Registration failed: $e')),
-          );
-        }
-      }
-    }
-  }
-
-  String _generateReferralCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    return String.fromCharCodes(
-      List.generate(8, (_) => chars.codeUnitAt(
-        DateTime.now().millisecondsSinceEpoch % chars.length,
-      )),
-    );
-  }
-
-  Future<void> _sendEmailViaBackend(String email, String otp) async {
+  Future<void> _sendEmailOTP(String email, String otp) async {
     try {
       final response = await http.post(
         Uri.parse('https://esmnst.onrender.com/api/send-otp-email'),
@@ -325,172 +117,253 @@ class _VerifyOTPScreenState extends State<VerifyOTPScreen> {
     }
   }
 
+  Future<void> _verifyOTP() async {
+    if (_otpController.text.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Enter the 6-digit OTP')),
+      );
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      // Check OTP in Firestore
+      final doc = await FirebaseFirestore.instance
+          .collection('otps')
+          .doc(widget.email)
+          .get();
+      
+      if (!doc.exists) {
+        throw Exception('OTP not found. Please resend.');
+      }
+      
+      final data = doc.data()!;
+      final storedOtp = data['otp'];
+      final expiresAt = data['expiresAt']?.toDate();
+      
+      // Check expiry
+      if (expiresAt != null && expiresAt.isBefore(DateTime.now())) {
+        throw Exception('OTP expired. Please resend.');
+      }
+      
+      // Check OTP match
+      if (storedOtp == _otpController.text.trim()) {
+        // ✅ OTP Verified - Create Account
+        await _createAccount();
+      } else {
+        throw Exception('Invalid OTP. Please try again.');
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _createAccount() async {
+    try {
+      // Create Firebase Auth account
+      final userCredential = await FirebaseAuth.instance
+          .createUserWithEmailAndPassword(
+        email: widget.email,
+        password: widget.password,
+      );
+
+      // Update display name
+      await userCredential.user?.updateDisplayName(widget.displayName);
+
+      // Create user document in Firestore
+      await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userCredential.user!.uid)
+          .set({
+        'email': widget.email,
+        'displayName': widget.displayName,
+        'phone': widget.phone,
+        'country': widget.country,
+        'walletBalance': 0.0,
+        'walletCurrency': 'USD',
+        'role': 'user',
+        'emailVerified': true,  // ✅ Mark as verified
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'referralCode': _generateReferralCode(),
+        'referredBy': '',
+      });
+
+      // Delete OTP from Firestore
+      await FirebaseFirestore.instance.collection('otps').doc(widget.email).delete();
+
+      setState(() => _isLoading = false);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('🎉 Account created successfully!'),
+            backgroundColor: Color(0xFF10B981),
+          ),
+        );
+        Navigator.pushReplacementNamed(context, '/home');
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Registration failed: $e')),
+        );
+      }
+    }
+  }
+
+  String _generateReferralCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    return String.fromCharCodes(
+      List.generate(8, (_) => chars.codeUnitAt(
+        DateTime.now().millisecondsSinceEpoch % chars.length,
+      )),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Verify Your Identity')),
-      body: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.security, size: 64, color: Color(0xFFF59E0B)),
-            const SizedBox(height: 16),
-            const Text(
-              'Verify Your Email & Phone',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              'We sent OTPs to your email and phone.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFF94A3B8)),
-            ),
-            const SizedBox(height: 32),
-
-            // Email OTP
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        _emailOtpVerified ? Icons.check_circle : Icons.email_outlined,
-                        color: _emailOtpVerified ? Colors.green : Colors.white,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          _emailOtpVerified ? 'Email Verified ✅' : 'Email OTP',
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                      ),
-                      if (!_emailOtpVerified)
-                        TextButton(
-                          onPressed: _canResend ? _sendEmailOTP : null,
-                          child: Text(
-                            _canResend ? 'Resend' : '${_resendTimer}s',
-                            style: TextStyle(
-                              color: _canResend ? const Color(0xFFF59E0B) : const Color(0xFF94A3B8),
-                            ),
-                          ),
-                        ),
-                    ],
+      appBar: AppBar(
+        title: const Text('Verify Your Email'),
+        backgroundColor: Colors.transparent,
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF0A1628), Color(0xFF1E3A5F)],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.email_outlined, size: 64, color: Color(0xFFF59E0B)),
+                const SizedBox(height: 16),
+                const Text(
+                  'Verify Your Email',
+                  style: TextStyle(
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
                   ),
-                  if (!_emailOtpVerified) ...[
-                    const SizedBox(height: 8),
-                    Row(
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'We sent a 6-digit OTP to: ${widget.email}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 14),
+                ),
+                const SizedBox(height: 32),
+                
+                if (!_otpSent) ...[
+                  const CircularProgressIndicator(color: Color(0xFFF59E0B)),
+                  const SizedBox(height: 16),
+                  const Text('Sending OTP...', style: TextStyle(color: Color(0xFF94A3B8))),
+                ] else ...[
+                  Container(
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                    ),
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
                       children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _emailOtpController,
-                            style: const TextStyle(color: Colors.white),
-                            decoration: const InputDecoration(
-                              hintText: 'Enter 6-digit OTP',
-                              border: OutlineInputBorder(),
+                        TextField(
+                          controller: _otpController,
+                          style: const TextStyle(color: Colors.white, fontSize: 18),
+                          decoration: InputDecoration(
+                            labelText: 'Enter 6-digit OTP',
+                            labelStyle: const TextStyle(color: Color(0xFF94A3B8)),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
                             ),
-                            keyboardType: TextInputType.number,
-                            maxLength: 6,
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(color: Color(0xFFF59E0B)),
+                            ),
                           ),
+                          keyboardType: TextInputType.number,
+                          maxLength: 6,
+                          textAlign: TextAlign.center,
                         ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: _isLoading ? null : _verifyEmailOTP,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2563EB),
-                            foregroundColor: Colors.white,
-                          ),
-                          child: const Text('Verify'),
+                        const SizedBox(height: 16),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            TextButton(
+                              onPressed: _canResend ? _sendOTP : null,
+                              child: Text(
+                                _canResend ? 'Resend OTP' : 'Resend in ${_resendTimer}s',
+                                style: TextStyle(
+                                  color: _canResend ? const Color(0xFFF59E0B) : const Color(0xFF94A3B8),
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            ElevatedButton(
+                              onPressed: _isLoading ? null : _verifyOTP,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFF59E0B),
+                                foregroundColor: const Color(0xFF0A1628),
+                                padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: _isLoading
+                                  ? const SizedBox(
+                                      width: 20,
+                                      height: 20,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Color(0xFF0A1628),
+                                      ),
+                                    )
+                                  : const Text(
+                                      'Verify',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
+                                      ),
+                                    ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // Phone OTP
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Icon(
-                        _phoneOtpVerified ? Icons.check_circle : Icons.phone_android,
-                        color: _phoneOtpVerified ? Colors.green : Colors.white,
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          _phoneOtpVerified ? 'Phone Verified ✅' : 'Phone OTP',
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                      ),
-                      if (!_phoneOtpVerified)
-                        TextButton(
-                          onPressed: _canResend ? _sendPhoneOTP : null,
-                          child: Text(
-                            _canResend ? 'Resend' : '${_resendTimer}s',
-                            style: TextStyle(
-                              color: _canResend ? const Color(0xFFF59E0B) : const Color(0xFF94A3B8),
-                            ),
-                          ),
-                        ),
-                    ],
                   ),
-                  if (!_phoneOtpVerified) ...[
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: TextField(
-                            controller: _phoneOtpController,
-                            style: const TextStyle(color: Colors.white),
-                            decoration: const InputDecoration(
-                              hintText: 'Enter 6-digit OTP',
-                              border: OutlineInputBorder(),
-                            ),
-                            keyboardType: TextInputType.number,
-                            maxLength: 6,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        ElevatedButton(
-                          onPressed: _isLoading ? null : _verifyPhoneOTP,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF10B981),
-                            foregroundColor: Colors.white,
-                          ),
-                          child: const Text('Verify'),
-                        ),
-                      ],
-                    ),
-                  ],
                 ],
-              ),
+                
+                const SizedBox(height: 24),
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    FirebaseAuth.instance.signOut();
+                  },
+                  child: const Text(
+                    'Cancel',
+                    style: TextStyle(color: Color(0xFF94A3B8)),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 32),
-            if (_isLoading) const CircularProgressIndicator(),
-            const SizedBox(height: 16),
-            TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-                FirebaseAuth.instance.signOut();
-              },
-              child: const Text('Cancel'),
-            ),
-          ],
+          ),
         ),
       ),
     );
