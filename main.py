@@ -617,21 +617,14 @@ async def verify_razorpay_payment(request: dict, user: dict = Depends(get_curren
 
 
 @app.post("/webhook")
-async def simple_webhook(request: Request):
-    """Simple webhook endpoint for eSIM Access"""
+async def simple_webhook(request_data: dict):
     try:
-        # Get the raw body
-        body = await request.body()
+        body = request_data
         print(f"📨 Webhook received at /webhook")
-        print(f"Headers: {request.headers}")
         print(f"Body: {body}")
         
-        # Try to parse as JSON
-        try:
-            data = json.loads(body)
-            print(f"JSON data: {data}")
-        except:
-            print("Body is not JSON")
+        # Try to parse as JSON (it's already a dict)
+        print(f"JSON data: {body}")
         
         # Always return 200 to acknowledge receipt
         return {"status": "received", "timestamp": datetime.now().isoformat()}
