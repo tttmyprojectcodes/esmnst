@@ -1,3 +1,4 @@
+# Force rebuild - 2026-07-28
 fastapi==0.104.1
 uvicorn==0.24.0
 firebase-admin==6.4.0
