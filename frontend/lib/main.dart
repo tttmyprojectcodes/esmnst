@@ -954,53 +954,44 @@ class _RegisterScreenState extends State<RegisterScreen> {
   bool _obscureConfirmPassword = true;
 
   Future<void> _register() async {
-  if (_nameController.text.isEmpty ||
-      _emailController.text.isEmpty ||
-      _phoneController.text.isEmpty ||
-      _countryController.text.isEmpty ||
-      _passwordController.text.isEmpty) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Please fill in all fields')),
-    );
-    return;
-  }
+    if (_nameController.text.isEmpty ||
+        _emailController.text.isEmpty ||
+        _phoneController.text.isEmpty ||
+        _countryController.text.isEmpty ||
+        _passwordController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill in all fields')),
+      );
+      return;
+    }
 
-  if (_passwordController.text != _confirmPasswordController.text) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Passwords do not match')),
-    );
-    return;
-  }
+    if (_passwordController.text != _confirmPasswordController.text) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Passwords do not match')),
+      );
+      return;
+    }
 
-  if (_passwordController.text.length < 6) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Password must be at least 6 characters')),
-    );
-    return;
-  }
+    if (_passwordController.text.length < 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password must be at least 6 characters')),
+      );
+      return;
+    }
 
-  // ✅ Navigate to OTP verification screen
-  Navigator.push(
-    context,
-    MaterialPageRoute(
-      builder: (context) => VerifyOTPScreen(
-        email: _emailController.text.trim(),
-        password: _passwordController.text.trim(),
-        displayName: _nameController.text.trim(),
-        phone: _phoneController.text.trim(),
-        country: _countryController.text.trim(),
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => VerifyOTPScreen(
+          email: _emailController.text.trim(),
+          password: _passwordController.text.trim(),
+          displayName: _nameController.text.trim(),
+          phone: _phoneController.text.trim(),
+          country: _countryController.text.trim(),
+        ),
       ),
-    ),
-  );
-}
-    setState(() => _isLoading = false);
-  } catch (e) {
-    setState(() => _isLoading = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Error: $e')),
     );
   }
-}
 
   @override
   Widget build(BuildContext context) {
@@ -1117,9 +1108,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   ? Icons.visibility_off
                                   : Icons.visibility,
                             ),
-                            onPressed: () => setState(
-                              () => _obscurePassword = !_obscurePassword,
-                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscurePassword = !_obscurePassword;
+                              });
+                            },
                           ),
                           border: const OutlineInputBorder(),
                           helperText: 'Must be at least 6 characters',
@@ -1139,10 +1132,11 @@ class _RegisterScreenState extends State<RegisterScreen> {
                                   ? Icons.visibility_off
                                   : Icons.visibility,
                             ),
-                            onPressed: () => setState(
-                              () =>
-                                  _obscureConfirmPassword = !_obscureConfirmPassword,
-                            ),
+                            onPressed: () {
+                              setState(() {
+                                _obscureConfirmPassword = !_obscureConfirmPassword;
+                              });
+                            },
                           ),
                           border: const OutlineInputBorder(),
                         ),
@@ -1218,7 +1212,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     );
   }
 }
-
 // =====================================================
 // 7. FORGOT PASSWORD SCREEN
 // =====================================================
