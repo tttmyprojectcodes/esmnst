@@ -3,28 +3,16 @@ services:
   - type: web
     name: esmnst-backend
     env: python
-    buildCommand: pip install -r backend/requirements.txt
+    buildCommand: pip install --no-cache-dir -r backend/requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.11
       - key: ALLOWED_ORIGINS
         value: https://esmnst-frontend.onrender.com,http://localhost:3000
-    envVars:
-  - key: PYTHON_VERSION
-    value: 3.11.11
-  - key: ALLOWED_ORIGINS
-    value: https://esmnst-frontend.onrender.com,http://localhost:3000
-  - key: SMTP_HOST
-    value: smtp.gmail.com
-  - key: SMTP_PORT
-    value: 587
-  - key: SMTP_USER
-    value: your_email@gmail.com
-  - key: SMTP_PASSWORD
-    value: your_app_password
-  - key: SMTP_FROM
-    value: your_email@gmail.com
+      - key: GMAIL_TOKEN_BASE64
+        value: YOUR_GMAIL_TOKEN_BASE64_HERE
+      # Your other env vars...
 
   # Frontend Static Site
   - type: web
