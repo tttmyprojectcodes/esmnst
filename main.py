@@ -1316,10 +1316,10 @@ async def purchase_esim(purchase: PurchasePlan, user: dict = Depends(get_current
 # =====================================================
 
 @app.post("/api/webhooks/esim")
-async def esim_webhook(request: Request):
+async def esim_webhook(request_data: dict):
     """Handle eSIM Access webhook notifications"""
     try:
-        body = await request.json()
+        body = request_data
         print(f"Webhook received: {json.dumps(body)}")
         
         # New webhook format from documentation
