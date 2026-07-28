@@ -97,35 +97,80 @@ else:
         razorpay_client = None
 
 # =====================================================
-# SMTP EMAIL CONFIGURATION
+# GMAIL API CONFIGURATION
 # =====================================================
 
-SMTP_HOST = os.getenv('SMTP_HOST', 'smtp.gmail.com')
-SMTP_PORT = int(os.getenv('SMTP_PORT', 587))
-SMTP_USER = os.getenv('SMTP_USER')
-SMTP_PASSWORD = os.getenv('SMTP_PASSWORD')
-SMTP_FROM = os.getenv('SMTP_FROM', SMTP_USER)
+import os
+import base64
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from google.auth.transport.requests import Request
+from googleapiclient.discovery import build
+import pickle
 
-def send_email_direct(to: str, subject: str, html: str):
-    """Send email directly using SMTP"""
+# Gmail API scopes - only need send permission
+SCOPES = ['https://www.googleapis.com/auth/gmail.send']
+
+def get_gmail_service():
+    """Get authenticated Gmail API service"""
+    creds = None
+    
+    # Token file stores user's access and refresh tokens
+    if os.path.exists('token.pickle'):
+        with open('token.pickle', 'rb') as token:
+            creds = pickle.load(token)
+    
+    # If there are no (valid) credentials available, let the user log in.
+    if not creds or not creds.valid:
+        if creds and creds.expired and creds.refresh_token:
+            creds.refresh(Request())
+        else:
+            # For production, you need to handle this differently
+            # You can use service account or store refresh token
+            flow = InstalledAppFlow.from_client_secrets_file(
+                'credentials.json', SCOPES)
+            creds = flow.run_local_server(port=0)
+        
+        # Save credentials for next run
+        with open('token.pickle', 'wb') as token:
+            pickle.dump(creds, token)
+    
+    return build('gmail', 'v1', credentials=creds)
+
+def send_email_gmail_api(to: str, subject: str, html: str):
+    """Send email using Gmail API"""
     try:
-        msg = MIMEMultipart('alternative')
-        msg['Subject'] = subject
-        msg['From'] = SMTP_FROM
-        msg['To'] = to
+        service = get_gmail_service()
         
+        # Create email message
+        message = MIMEMultipart('alternative')
+        message['to'] = to
+        message['subject'] = subject
+        
+        # Attach HTML content
         html_part = MIMEText(html, 'html')
-        msg.attach(html_part)
+        message.attach(html_part)
         
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
-            server.starttls()
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            server.send_message(msg)
-        print(f"✅ Email sent to {to}")
+        # Encode message
+        raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+        
+        # Send email
+        service.users().messages().send(
+            userId='me',
+            body={'raw': raw}
+        ).execute()
+        
+        print(f"✅ Email sent to {to} via Gmail API")
         return True
+        
     except Exception as e:
-        print(f"❌ Email error: {e}")
+        print(f"❌ Gmail API error: {e}")
         return False
+
+# Alias for compatibility with existing code
+send_email_direct = send_email_gmail_api
 
 # =====================================================
 # 4. eSIM ACCESS AUTHENTICATION (UPDATED)
