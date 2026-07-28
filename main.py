@@ -322,7 +322,6 @@ async def send_otp_email(request: Request):
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-
 @app.post("/api/payment/paypal/create-order")
 async def create_paypal_order(request: dict, user: dict = Depends(get_current_user)):
     try:
